@@ -140,14 +140,16 @@ export class DealsService {
   }
 
   async markDelivered(id: string) {
+    const deliveredAt = new Date();
+
     await this.transition(id, DealStatus.DELIVERED, 'delivery.delivered', undefined, {
-      deliveredAt: new Date(),
+      deliveredAt,
       deliveries: {
         updateMany: {
           where: { dealId: id },
           data: {
             status: 'DELIVERED',
-            deliveredAt: new Date()
+            deliveredAt
           }
         }
       }
@@ -156,9 +158,13 @@ export class DealsService {
     const delivered = await this.get(id);
     const inspectionEndsAt = new Date(Date.now() + delivered.inspectionHours * 60 * 60 * 1000);
 
-    return this.transition(id, DealStatus.INSPECTION, 'inspection.started', { inspectionEndsAt }, {
-      inspectionEndsAt
-    });
+    return this.transition(
+      id,
+      DealStatus.INSPECTION,
+      'inspection.started',
+      { inspectionEndsAt: inspectionEndsAt.toISOString() },
+      { inspectionEndsAt }
+    );
   }
 
   async complete(id: string, reason: string) {
