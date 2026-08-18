@@ -1,7 +1,15 @@
 import 'reflect-metadata';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { config as loadEnv } from 'dotenv';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+
+const rootEnvPath = resolve(process.cwd(), '../../.env');
+const localEnvPath = resolve(process.cwd(), '.env');
+
+loadEnv({ path: existsSync(rootEnvPath) ? rootEnvPath : localEnvPath });
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
