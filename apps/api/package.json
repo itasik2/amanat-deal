@@ -17,6 +17,7 @@
     "@prisma/client": "^6.0.0",
     "class-validator": "^0.14.1",
     "class-transformer": "^0.5.1",
+    "dotenv": "^16.4.7",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
