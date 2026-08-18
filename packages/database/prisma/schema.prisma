@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DealStatus {
+  DRAFT
+  WAITING_BUYER
+  WAITING_PAYMENT
+  FUNDS_SECURED
+  WAITING_SHIPMENT
+  SHIPPED
+  DELIVERED
+  INSPECTION
+  COMPLETED
+  PROBLEM_REPORTED
+  CANCELLED
+  EXPIRED
+  WAITING_LEGAL_RESOLUTION
+}
+
+enum DealCategory {
+  GOODS
+  SERVICE
+  REPAIR
+  EQUIPMENT
+  OTHER
+}
+
+enum DealRole {
+  SELLER
+  BUYER
+  ADMIN
+  SYSTEM
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String?  @unique
+  email     String?  @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sellerDeals Deal[] @relation("SellerDeals")
+  buyerDeals  Deal[] @relation("BuyerDeals")
+  events      DealEvent[]
+}
+
+model Deal {
+  id                  String       @id @default(cuid())
+  publicCode          String       @unique @default(cuid())
+  title               String
+  description         String
+  category            DealCategory
+  amountKzt           Int
+  platformFeeKzt      Int
+  inspectionHours     Int          @default(48)
+  status              DealStatus   @default(DRAFT)
+  sellerId            String?
+  buyerId             String?
+  acceptedBySellerAt  DateTime?
+  acceptedByBuyerAt   DateTime?
+  fundsSecuredAt      DateTime?
+  shippedAt           DateTime?
+  deliveredAt         DateTime?
+  inspectionEndsAt    DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  seller    User?         @relation("SellerDeals", fields: [sellerId], references: [id])
+  buyer     User?         @relation("BuyerDeals", fields: [buyerId], references: [id])
+  terms     DealTerm[]
+  payments  Payment[]
+  deliveries Delivery[]
+  evidence  EvidenceFile[]
+  events    DealEvent[]
+}
+
+model DealTerm {
+  id        String   @id @default(cuid())
+  dealId    String
+  version   Int
+  text      String
+  hash      String
+  createdAt DateTime @default(now())
+
+  deal Deal @relation(fields: [dealId], references: [id])
+
+  @@unique([dealId, version])
+}
+
+model Payment {
+  id                  String   @id @default(cuid())
+  dealId              String
+  provider            String
+  externalReference   String?  @unique
+  amountKzt           Int
+  platformFeeKzt      Int
+  status              String
+  rawPayloadHash      String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  deal Deal @relation(fields: [dealId], references: [id])
+}
+
+model Delivery {
+  id             String   @id @default(cuid())
+  dealId         String
+  carrier        String?
+  trackingNumber String?
+  status         String   @default("MANUAL")
+  deliveredAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  deal Deal @relation(fields: [dealId], references: [id])
+}
+
+model EvidenceFile {
+  id          String   @id @default(cuid())
+  dealId      String
+  uploadedBy  String?
+  kind        String
+  fileName    String
+  storageUrl  String
+  sha256      String
+  createdAt   DateTime @default(now())
+
+  deal Deal @relation(fields: [dealId], references: [id])
+}
+
+model DealEvent {
+  id          String   @id @default(cuid())
+  dealId      String
+  actorId     String?
+  actorRole   DealRole
+  eventType   String
+  fromStatus  DealStatus?
+  toStatus    DealStatus?
+  payload     Json?
+  createdAt   DateTime @default(now())
+
+  deal  Deal  @relation(fields: [dealId], references: [id])
+  actor User? @relation(fields: [actorId], references: [id])
+}
