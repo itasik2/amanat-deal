@@ -1,128 +1,244 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import {
+  DealCategory,
+  DealRole,
+  DealStatus as PrismaDealStatus,
+  Prisma
+} from '@prisma/client';
 import { CreateDealDto } from './dto/create-deal.dto';
 import { DealStatus } from './deal-status.enum';
 import { assertCanTransition } from './deal-state-machine';
+import { PrismaService } from '../prisma/prisma.service';
 
-type Deal = {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  amountKzt: number;
-  platformFeeKzt: number;
-  inspectionHours: number;
-  status: DealStatus;
-  carrier?: string;
-  trackingNumber?: string;
-  inspectionEndsAt?: string;
-  createdAt: string;
-};
-
-type DealEvent = {
-  id: string;
-  dealId: string;
-  eventType: string;
-  fromStatus?: DealStatus;
-  toStatus?: DealStatus;
-  payload?: unknown;
-  createdAt: string;
-};
+const dealInclude = {
+  payments: true,
+  deliveries: true,
+  evidence: true
+} satisfies Prisma.DealInclude;
 
 @Injectable()
 export class DealsService {
-  private readonly deals = new Map<string, Deal>();
-  private readonly dealEvents = new Map<string, DealEvent[]>();
+  constructor(private readonly prisma: PrismaService) {}
 
-  create(dto: CreateDealDto) {
+  async create(dto: CreateDealDto) {
     const fee = this.calculateFee(dto.amountKzt);
-    const deal: Deal = {
-      id: randomUUID(),
-      title: dto.title,
-      description: dto.description,
-      category: dto.category,
-      amountKzt: dto.amountKzt,
-      platformFeeKzt: fee,
-      inspectionHours: dto.inspectionHours ?? Number(process.env.DEFAULT_INSPECTION_HOURS ?? 48),
-      status: DealStatus.WAITING_BUYER,
-      createdAt: new Date().toISOString()
-    };
-    this.deals.set(deal.id, deal);
-    this.addEvent(deal.id, 'deal.created', undefined, deal.status, { title: deal.title });
-    return deal;
+    const inspectionHours = dto.inspectionHours ?? Number(process.env.DEFAULT_INSPECTION_HOURS ?? 48);
+    const status = this.toPrismaStatus(DealStatus.WAITING_BUYER);
+
+    return this.prisma.deal.create({
+      data: {
+        title: dto.title,
+        description: dto.description,
+        category: dto.category as DealCategory,
+        amountKzt: dto.amountKzt,
+        platformFeeKzt: fee,
+        inspectionHours,
+        status,
+        events: {
+          create: this.eventData('deal.created', undefined, status, { title: dto.title })
+        }
+      },
+      include: dealInclude
+    });
   }
 
-  list() {
-    return Array.from(this.deals.values());
+  async list() {
+    return this.prisma.deal.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: dealInclude
+    });
   }
 
-  get(id: string) {
-    const deal = this.deals.get(id);
+  async get(id: string) {
+    const deal = await this.prisma.deal.findUnique({
+      where: { id },
+      include: dealInclude
+    });
+
     if (!deal) throw new NotFoundException('Deal not found');
     return deal;
   }
 
-  accept(id: string) {
-    return this.transition(id, DealStatus.WAITING_PAYMENT, 'deal.accepted');
+  async accept(id: string) {
+    return this.transition(id, DealStatus.WAITING_PAYMENT, 'deal.accepted', undefined, {
+      acceptedByBuyerAt: new Date()
+    });
   }
 
-  mockPayment(id: string) {
-    const secured = this.transition(id, DealStatus.FUNDS_SECURED, 'mock_escrow.funds_secured');
-    return this.transition(secured.id, DealStatus.WAITING_SHIPMENT, 'deal.ready_for_shipment');
+  async mockPayment(id: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const deal = await this.findDealOrThrow(tx, id);
+      const fundsSecured = this.toPrismaStatus(DealStatus.FUNDS_SECURED);
+      assertCanTransition(this.toLocalStatus(deal.status), DealStatus.FUNDS_SECURED);
+
+      await tx.deal.update({
+        where: { id },
+        data: {
+          status: fundsSecured,
+          fundsSecuredAt: new Date(),
+          payments: {
+            create: {
+              provider: 'mock-escrow',
+              externalReference: `mock-${id}-${Date.now()}`,
+              amountKzt: deal.amountKzt,
+              platformFeeKzt: deal.platformFeeKzt,
+              status: 'FUNDS_SECURED'
+            }
+          },
+          events: {
+            create: this.eventData('mock_escrow.funds_secured', deal.status, fundsSecured, {
+              provider: 'mock-escrow'
+            })
+          }
+        }
+      });
+
+      const readyForShipment = this.toPrismaStatus(DealStatus.WAITING_SHIPMENT);
+      assertCanTransition(DealStatus.FUNDS_SECURED, DealStatus.WAITING_SHIPMENT);
+
+      await tx.deal.update({
+        where: { id },
+        data: {
+          status: readyForShipment,
+          events: {
+            create: this.eventData('deal.ready_for_shipment', fundsSecured, readyForShipment)
+          }
+        }
+      });
+    });
+
+    return this.get(id);
   }
 
-  markShipped(id: string, shipment: { carrier?: string; trackingNumber?: string }) {
-    const deal = this.get(id);
-    assertCanTransition(deal.status, DealStatus.SHIPPED);
-    const updated = { ...deal, ...shipment, status: DealStatus.SHIPPED };
-    this.deals.set(id, updated);
-    this.addEvent(id, 'shipment.added', deal.status, updated.status, shipment);
-    return updated;
+  async markShipped(id: string, shipment: { carrier?: string; trackingNumber?: string }) {
+    const shippedStatus = this.toPrismaStatus(DealStatus.SHIPPED);
+
+    await this.prisma.$transaction(async (tx) => {
+      const deal = await this.findDealOrThrow(tx, id);
+      assertCanTransition(this.toLocalStatus(deal.status), DealStatus.SHIPPED);
+
+      await tx.deal.update({
+        where: { id },
+        data: {
+          status: shippedStatus,
+          shippedAt: new Date(),
+          deliveries: {
+            create: {
+              carrier: shipment.carrier,
+              trackingNumber: shipment.trackingNumber,
+              status: 'SHIPPED'
+            }
+          },
+          events: {
+            create: this.eventData('shipment.added', deal.status, shippedStatus, shipment)
+          }
+        }
+      });
+    });
+
+    return this.get(id);
   }
 
-  markDelivered(id: string) {
-    const delivered = this.transition(id, DealStatus.DELIVERED, 'delivery.delivered');
-    const inspectionEndsAt = new Date(Date.now() + delivered.inspectionHours * 60 * 60 * 1000).toISOString();
-    const inspection = { ...delivered, status: DealStatus.INSPECTION, inspectionEndsAt };
-    assertCanTransition(delivered.status, inspection.status);
-    this.deals.set(id, inspection);
-    this.addEvent(id, 'inspection.started', delivered.status, inspection.status, { inspectionEndsAt });
-    return inspection;
+  async markDelivered(id: string) {
+    await this.transition(id, DealStatus.DELIVERED, 'delivery.delivered', undefined, {
+      deliveredAt: new Date(),
+      deliveries: {
+        updateMany: {
+          where: { dealId: id },
+          data: {
+            status: 'DELIVERED',
+            deliveredAt: new Date()
+          }
+        }
+      }
+    });
+
+    const delivered = await this.get(id);
+    const inspectionEndsAt = new Date(Date.now() + delivered.inspectionHours * 60 * 60 * 1000);
+
+    return this.transition(id, DealStatus.INSPECTION, 'inspection.started', { inspectionEndsAt }, {
+      inspectionEndsAt
+    });
   }
 
-  complete(id: string, reason: string) {
-    return this.transition(id, DealStatus.COMPLETED, 'mock_escrow.release_to_seller', { reason });
+  async complete(id: string, reason: string) {
+    return this.transition(id, DealStatus.COMPLETED, 'mock_escrow.release_to_seller', { reason }, {
+      completedAt: new Date()
+    });
   }
 
-  reportProblem(id: string, reason: string) {
+  async reportProblem(id: string, reason: string) {
     return this.transition(id, DealStatus.PROBLEM_REPORTED, 'problem.reported', { reason });
   }
 
-  events(id: string) {
-    this.get(id);
-    return this.dealEvents.get(id) ?? [];
+  async events(id: string) {
+    await this.get(id);
+    return this.prisma.dealEvent.findMany({
+      where: { dealId: id },
+      orderBy: { createdAt: 'asc' }
+    });
   }
 
-  private transition(id: string, nextStatus: DealStatus, eventType: string, payload?: unknown) {
-    const deal = this.get(id);
-    assertCanTransition(deal.status, nextStatus);
-    const updated = { ...deal, status: nextStatus };
-    this.deals.set(id, updated);
-    this.addEvent(id, eventType, deal.status, nextStatus, payload);
-    return updated;
+  private async transition(
+    id: string,
+    nextStatus: DealStatus,
+    eventType: string,
+    payload?: unknown,
+    data: Prisma.DealUpdateInput = {}
+  ) {
+    const prismaStatus = this.toPrismaStatus(nextStatus);
+
+    await this.prisma.$transaction(async (tx) => {
+      const deal = await this.findDealOrThrow(tx, id);
+      assertCanTransition(this.toLocalStatus(deal.status), nextStatus);
+
+      await tx.deal.update({
+        where: { id },
+        data: {
+          ...data,
+          status: prismaStatus,
+          events: {
+            create: this.eventData(eventType, deal.status, prismaStatus, payload)
+          }
+        }
+      });
+    });
+
+    return this.get(id);
   }
 
-  private addEvent(dealId: string, eventType: string, fromStatus?: DealStatus, toStatus?: DealStatus, payload?: unknown) {
-    const event: DealEvent = {
-      id: randomUUID(),
-      dealId,
+  private async findDealOrThrow(tx: Prisma.TransactionClient, id: string) {
+    const deal = await tx.deal.findUnique({ where: { id } });
+    if (!deal) throw new NotFoundException('Deal not found');
+    return deal;
+  }
+
+  private eventData(
+    eventType: string,
+    fromStatus?: PrismaDealStatus,
+    toStatus?: PrismaDealStatus,
+    payload?: unknown
+  ): Prisma.DealEventCreateWithoutDealInput {
+    const data: Prisma.DealEventCreateWithoutDealInput = {
+      actorRole: DealRole.SYSTEM,
       eventType,
       fromStatus,
-      toStatus,
-      payload,
-      createdAt: new Date().toISOString()
+      toStatus
     };
-    this.dealEvents.set(dealId, [...(this.dealEvents.get(dealId) ?? []), event]);
+
+    if (payload !== undefined) {
+      data.payload = payload as Prisma.InputJsonValue;
+    }
+
+    return data;
+  }
+
+  private toLocalStatus(status: PrismaDealStatus) {
+    return status as unknown as DealStatus;
+  }
+
+  private toPrismaStatus(status: DealStatus) {
+    return status as unknown as PrismaDealStatus;
   }
 
   private calculateFee(amountKzt: number) {
