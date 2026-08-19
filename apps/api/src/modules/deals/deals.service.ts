@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   DealCategory,
   DealRole,
   DealStatus as PrismaDealStatus,
+  DisputeMessageType,
   Prisma
 } from '@prisma/client';
 import { CreateDealDto } from './dto/create-deal.dto';
@@ -174,7 +175,38 @@ export class DealsService {
   }
 
   async reportProblem(id: string, reason: string) {
-    return this.transition(id, DealStatus.PROBLEM_REPORTED, 'problem.reported', { reason });
+    const summary = reason?.trim();
+    if (!summary || summary.length < 3) {
+      throw new BadRequestException('Problem reason is too short');
+    }
+
+    const problemStatus = this.toPrismaStatus(DealStatus.PROBLEM_REPORTED);
+
+    await this.prisma.$transaction(async (tx) => {
+      const deal = await this.findDealOrThrow(tx, id);
+      assertCanTransition(this.toLocalStatus(deal.status), DealStatus.PROBLEM_REPORTED);
+
+      await tx.deal.update({
+        where: { id },
+        data: {
+          status: problemStatus,
+          events: {
+            create: this.eventData('problem.reported', deal.status, problemStatus, { reason: summary })
+          }
+        }
+      });
+
+      await tx.disputeMessage.create({
+        data: {
+          dealId: id,
+          actorRole: DealRole.SYSTEM,
+          messageType: DisputeMessageType.SYSTEM,
+          body: `Проблема зафиксирована: ${summary}`
+        }
+      });
+    });
+
+    return this.get(id);
   }
 
   async events(id: string) {
