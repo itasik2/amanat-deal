@@ -9,3 +9,4 @@ coverage
 *.log
 .prisma
 uploads
+.data
