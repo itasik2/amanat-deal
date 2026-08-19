@@ -1,0 +1,25 @@
+.deal-extras { padding-top: 0; }
+.form-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.form-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.evidence-list { display: grid; gap: 10px; }
+.evidence-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px; }
+.evidence-main { min-width: 0; display: grid; gap: 5px; }
+.hash { display: block; max-width: 100%; overflow-wrap: anywhere; font-size: .76rem; color: #64748b; background: #f8fafc; border-radius: 8px; padding: 6px 8px; }
+.compact-button { min-height: 38px; padding: 8px 12px; flex: 0 0 auto; }
+.dispute-panel { border-color: #f1d7a7; }
+.dispute-messages { display: grid; gap: 12px; }
+.dispute-message { max-width: 82%; border: 1px solid #e5e7eb; border-radius: 16px; padding: 14px 16px; background: #f8fafc; }
+.dispute-message.role-buyer { justify-self: start; border-color: #bfdbfe; background: #eff6ff; }
+.dispute-message.role-seller { justify-self: end; border-color: #ddd6fe; background: #f5f3ff; }
+.dispute-message.role-admin, .dispute-message.role-system { max-width: 100%; justify-self: stretch; }
+.dispute-message p { margin: 10px 0; line-height: 1.5; white-space: pre-wrap; }
+.dispute-message-head { display: flex; justify-content: space-between; gap: 12px; }
+.proposal-badge { margin-top: 9px; border-radius: 10px; padding: 9px 11px; background: #fff7ed; border: 1px solid #fed7aa; font-weight: 750; }
+.compact-notice { margin-top: 9px; padding: 8px 10px; }
+.button-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.spacing-top-small { margin-top: 10px; }
+@media (max-width: 760px) {
+  .form-grid-3, .form-grid-2 { grid-template-columns: 1fr; }
+  .evidence-item { align-items: flex-start; flex-direction: column; }
+  .dispute-message { max-width: 100%; }
+}
