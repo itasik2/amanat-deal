@@ -63,6 +63,10 @@ export function DisputePanel({
     () => new Set(messages.filter((item) => item.proposalId).map((item) => item.proposalId as string)),
     [messages]
   );
+  const hasAcceptedAgreement = useMemo(
+    () => messages.some((item) => item.messageType === 'PROPOSAL_ACCEPTED'),
+    [messages]
+  );
 
   const load = useCallback(async () => {
     if (!enabled) return;
@@ -77,6 +81,10 @@ export function DisputePanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (hasAcceptedAgreement && mode === 'PROPOSAL') setMode('MESSAGE');
+  }, [hasAcceptedAgreement, mode]);
 
   if (!enabled) return null;
 
@@ -163,11 +171,16 @@ export function DisputePanel({
       <div className="notice warning">
         Принятие предложения фиксирует соглашение сторон. Фактический возврат или выплата выполняются отдельной backend-командой после проверки оснований.
       </div>
+      {hasAcceptedAgreement ? (
+        <div className="notice success spacing-top-small">
+          Стороны зафиксировали соглашение. Новые предложения заблокированы; сообщения и доказательства остаются доступны до исполнения settlement.
+        </div>
+      ) : null}
 
       <div className="dispute-messages spacing-top">
         {messages.map((item) => {
           const isProposal = item.messageType === 'PROPOSAL';
-          const canRespond = isProposal && item.actorRole !== actorRole && !respondedProposalIds.has(item.id);
+          const canRespond = isProposal && !hasAcceptedAgreement && item.actorRole !== actorRole && !respondedProposalIds.has(item.id);
           return (
             <div className={`dispute-message role-${item.actorRole.toLowerCase()}`} key={item.id}>
               <div className="dispute-message-head">
@@ -197,7 +210,7 @@ export function DisputePanel({
             </div>
           );
         })}
-        {messages.length === 0 ? <p className="muted">Переговоров пока нет. Причина проблемы остаётся в audit trail сделки.</p> : null}
+        {messages.length === 0 ? <p className="muted">Переговоров пока нет.</p> : null}
       </div>
 
       <form className="form dispute-form spacing-top" onSubmit={submit}>
@@ -213,7 +226,7 @@ export function DisputePanel({
             <span>Тип</span>
             <select value={mode} onChange={(event) => setMode(event.target.value as 'MESSAGE' | 'PROPOSAL')}>
               <option value="MESSAGE">Сообщение</option>
-              <option value="PROPOSAL">Предложение урегулирования</option>
+              <option value="PROPOSAL" disabled={hasAcceptedAgreement}>Предложение урегулирования</option>
             </select>
           </label>
           <label className="field">
