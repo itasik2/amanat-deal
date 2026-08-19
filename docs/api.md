@@ -15,6 +15,25 @@ Base path: `/api/v1`.
 - `POST /deals/:id/report-problem` — stops normal flow and moves deal to `PROBLEM_REPORTED`.
 - `GET /deals/:id/events` — immutable event timeline.
 
+## Evidence
+
+- `GET /deals/:id/evidence` — list deal evidence and metadata.
+- `POST /deals/:id/evidence` — multipart upload (`file`, `kind`, `uploaderRole`, optional `note`).
+- `GET /deals/:id/evidence/:evidenceId/file` — open/download stored evidence.
+
+The API computes SHA-256 on the server. The pilot stores files through `StorageProvider`; the default implementation writes to local `.data/evidence`, while the business layer is prepared for a later S3/R2 provider.
+
+## Dispute settlement channel
+
+Available for deals in `PROBLEM_REPORTED` or `WAITING_LEGAL_RESOLUTION`.
+
+- `GET /deals/:id/dispute/messages` — immutable negotiation history.
+- `POST /deals/:id/dispute/messages` — add a buyer/seller message and optionally attach evidence.
+- `POST /deals/:id/dispute/proposals` — propose full refund, partial refund, release to seller, or custom settlement.
+- `POST /deals/:id/dispute/proposals/:proposalId/respond` — accept or reject a proposal.
+
+Acceptance records a settlement agreement in the audit trail. It does **not** move money by itself. Release/refund will remain a separate backend/provider command.
+
 ## Admin
 
 - `GET /admin/deals` — later: list pilot deals for operators.
@@ -40,4 +59,4 @@ npm run prisma:migrate
 npm run dev
 ```
 
-The current MVP still uses mock escrow, but deals, deliveries, payments and events are now designed to persist in PostgreSQL instead of in-memory maps.
+The current MVP still uses mock escrow, but deals, deliveries, payments, evidence, dispute messages and events persist in PostgreSQL instead of in-memory maps.
