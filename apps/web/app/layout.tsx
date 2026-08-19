@@ -1,4 +1,5 @@
 import './styles.css';
+import './deal/[id]/extras.css';
 
 export const metadata = {
   title: 'Amanat Deal',
