@@ -156,6 +156,16 @@ export class DisputesService {
     if (existingResponse) throw new BadRequestException('Proposal already has a response');
 
     const accepted = decision === 'ACCEPT';
+    if (accepted) {
+      const existingAgreement = await this.prisma.disputeMessage.findFirst({
+        where: { dealId, messageType: DisputeMessageType.PROPOSAL_ACCEPTED },
+        select: { id: true }
+      });
+      if (existingAgreement) {
+        throw new BadRequestException('This dispute already has an accepted settlement proposal');
+      }
+    }
+
     const responseType = accepted
       ? DisputeMessageType.PROPOSAL_ACCEPTED
       : DisputeMessageType.PROPOSAL_REJECTED;
