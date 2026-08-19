@@ -84,6 +84,7 @@ export class DisputesService {
 
   async proposal(dealId: string, input: DisputeProposalInput) {
     const deal = await this.ensureDisputeDeal(dealId);
+    await this.ensureNoAcceptedSettlement(dealId);
     const actorRole = this.parseActorRole(input.actorRole);
     const settlementType = this.parseSettlementType(input.settlementType);
     const body = this.requireBody(input.body);
@@ -156,15 +157,7 @@ export class DisputesService {
     if (existingResponse) throw new BadRequestException('Proposal already has a response');
 
     const accepted = decision === 'ACCEPT';
-    if (accepted) {
-      const existingAgreement = await this.prisma.disputeMessage.findFirst({
-        where: { dealId, messageType: DisputeMessageType.PROPOSAL_ACCEPTED },
-        select: { id: true }
-      });
-      if (existingAgreement) {
-        throw new BadRequestException('This dispute already has an accepted settlement proposal');
-      }
-    }
+    if (accepted) await this.ensureNoAcceptedSettlement(dealId);
 
     const responseType = accepted
       ? DisputeMessageType.PROPOSAL_ACCEPTED
@@ -216,6 +209,16 @@ export class DisputesService {
       throw new BadRequestException('Dispute channel is available only after a problem is reported');
     }
     return deal;
+  }
+
+  private async ensureNoAcceptedSettlement(dealId: string) {
+    const existingAgreement = await this.prisma.disputeMessage.findFirst({
+      where: { dealId, messageType: DisputeMessageType.PROPOSAL_ACCEPTED },
+      select: { id: true }
+    });
+    if (existingAgreement) {
+      throw new BadRequestException('This dispute already has an accepted settlement proposal');
+    }
   }
 
   private async ensureEvidence(dealId: string, evidenceId?: string) {
