@@ -38,6 +38,21 @@ enum DealRole {
   SYSTEM
 }
 
+enum DisputeMessageType {
+  MESSAGE
+  PROPOSAL
+  PROPOSAL_ACCEPTED
+  PROPOSAL_REJECTED
+  SYSTEM
+}
+
+enum SettlementType {
+  FULL_REFUND
+  PARTIAL_REFUND
+  RELEASE_TO_SELLER
+  CUSTOM
+}
+
 model User {
   id        String   @id @default(cuid())
   phone     String?  @unique
@@ -73,13 +88,14 @@ model Deal {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  seller    User?         @relation("SellerDeals", fields: [sellerId], references: [id])
-  buyer     User?         @relation("BuyerDeals", fields: [buyerId], references: [id])
-  terms     DealTerm[]
-  payments  Payment[]
-  deliveries Delivery[]
-  evidence  EvidenceFile[]
-  events    DealEvent[]
+  seller          User?             @relation("SellerDeals", fields: [sellerId], references: [id])
+  buyer           User?             @relation("BuyerDeals", fields: [buyerId], references: [id])
+  terms           DealTerm[]
+  payments        Payment[]
+  deliveries      Delivery[]
+  evidence        EvidenceFile[]
+  events          DealEvent[]
+  disputeMessages DisputeMessage[]
 }
 
 model DealTerm {
@@ -124,16 +140,42 @@ model Delivery {
 }
 
 model EvidenceFile {
-  id          String   @id @default(cuid())
-  dealId      String
-  uploadedBy  String?
-  kind        String
-  fileName    String
-  storageUrl  String
-  sha256      String
-  createdAt   DateTime @default(now())
+  id              String   @id @default(cuid())
+  dealId          String
+  uploadedBy      String?
+  uploaderRole    DealRole @default(SYSTEM)
+  kind            String
+  fileName        String
+  mimeType        String   @default("application/octet-stream")
+  sizeBytes       Int      @default(0)
+  storageUrl      String
+  sha256          String
+  note            String?
+  createdAt       DateTime @default(now())
 
-  deal Deal @relation(fields: [dealId], references: [id])
+  deal            Deal             @relation(fields: [dealId], references: [id])
+  disputeMessages DisputeMessage[]
+
+  @@index([dealId, createdAt])
+}
+
+model DisputeMessage {
+  id             String             @id @default(cuid())
+  dealId         String
+  actorRole      DealRole
+  messageType    DisputeMessageType @default(MESSAGE)
+  body           String
+  settlementType SettlementType?
+  amountKzt      Int?
+  evidenceId     String?
+  proposalId     String?
+  createdAt      DateTime           @default(now())
+
+  deal     Deal          @relation(fields: [dealId], references: [id])
+  evidence EvidenceFile? @relation(fields: [evidenceId], references: [id])
+
+  @@index([dealId, createdAt])
+  @@index([proposalId])
 }
 
 model DealEvent {
