@@ -20,14 +20,18 @@ async function proxy(request: Request, context: RouteContext) {
   };
 
   if (request.method !== 'GET' && request.method !== 'HEAD') {
-    init.body = await request.text();
+    init.body = await request.arrayBuffer();
   }
 
   try {
     const upstream = await fetch(targetUrl, init);
     const responseHeaders = new Headers();
     const upstreamContentType = upstream.headers.get('content-type');
+    const disposition = upstream.headers.get('content-disposition');
+    const sha256 = upstream.headers.get('x-evidence-sha256');
     if (upstreamContentType) responseHeaders.set('content-type', upstreamContentType);
+    if (disposition) responseHeaders.set('content-disposition', disposition);
+    if (sha256) responseHeaders.set('x-evidence-sha256', sha256);
 
     return new Response(await upstream.arrayBuffer(), {
       status: upstream.status,
