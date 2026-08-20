@@ -38,6 +38,10 @@ enum DealRole {
   SYSTEM
 }
 
+enum DealExtensionType {
+  EVIDENCE
+}
+
 enum DisputeMessageType {
   MESSAGE
   PROPOSAL
@@ -93,9 +97,24 @@ model Deal {
   terms           DealTerm[]
   payments        Payment[]
   deliveries      Delivery[]
+  extensions      DealExtension[]
   evidence        EvidenceFile[]
   events          DealEvent[]
   disputeMessages DisputeMessage[]
+}
+
+model DealExtension {
+  id            String            @id @default(cuid())
+  dealId        String
+  type          DealExtensionType
+  enabledByRole DealRole          @default(SYSTEM)
+  config        Json?
+  enabledAt     DateTime          @default(now())
+
+  deal Deal @relation(fields: [dealId], references: [id])
+
+  @@unique([dealId, type])
+  @@index([dealId, enabledAt])
 }
 
 model DealTerm {
