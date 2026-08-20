@@ -8,6 +8,11 @@ export enum DealCategoryDto {
   OTHER = 'OTHER'
 }
 
+export enum ProtectionPlanDto {
+  BASIC = 'BASIC',
+  EXTENDED = 'EXTENDED'
+}
+
 export class CreateDealDto {
   @IsString()
   @MinLength(3)
@@ -23,6 +28,10 @@ export class CreateDealDto {
   @IsInt()
   @Min(1000)
   amountKzt!: number;
+
+  @IsOptional()
+  @IsEnum(ProtectionPlanDto)
+  protectionPlan?: ProtectionPlanDto;
 
   @IsOptional()
   @IsInt()
