@@ -40,11 +40,13 @@ export function DisputePanel({
   dealId,
   dealStatus,
   dealAmountKzt,
+  evidenceEnabled,
   onChanged
 }: {
   dealId: string;
   dealStatus: string;
   dealAmountKzt: number;
+  evidenceEnabled: boolean;
   onChanged: () => void;
 }) {
   const enabled = ['PROBLEM_REPORTED', 'WAITING_LEGAL_RESOLUTION'].includes(dealStatus);
@@ -70,13 +72,18 @@ export function DisputePanel({
 
   const load = useCallback(async () => {
     if (!enabled) return;
-    const [messagesResponse, evidenceResponse] = await Promise.all([
-      fetch(`/api/backend/deals/${dealId}/dispute/messages`, { cache: 'no-store' }),
-      fetch(`/api/backend/deals/${dealId}/evidence`, { cache: 'no-store' })
-    ]);
+
+    const messagesResponse = await fetch(`/api/backend/deals/${dealId}/dispute/messages`, { cache: 'no-store' });
     if (messagesResponse.ok) setMessages((await messagesResponse.json()) as DisputeMessage[]);
-    if (evidenceResponse.ok) setEvidence((await evidenceResponse.json()) as Evidence[]);
-  }, [dealId, enabled]);
+
+    if (evidenceEnabled) {
+      const evidenceResponse = await fetch(`/api/backend/deals/${dealId}/evidence`, { cache: 'no-store' });
+      if (evidenceResponse.ok) setEvidence((await evidenceResponse.json()) as Evidence[]);
+    } else {
+      setEvidence([]);
+      setEvidenceId('');
+    }
+  }, [dealId, enabled, evidenceEnabled]);
 
   useEffect(() => {
     void load();
@@ -101,9 +108,9 @@ export function DisputePanel({
       const proposal = mode === 'PROPOSAL';
       const payload: Record<string, unknown> = {
         actorRole,
-        body: body.trim(),
-        evidenceId: evidenceId || undefined
+        body: body.trim()
       };
+      if (evidenceEnabled && evidenceId) payload.evidenceId = evidenceId;
       if (proposal) {
         payload.settlementType = settlementType;
         if (amountKzt.trim()) payload.amountKzt = Number(amountKzt);
@@ -171,6 +178,11 @@ export function DisputePanel({
       <div className="notice warning">
         Принятие предложения фиксирует соглашение сторон. Фактический возврат или выплата выполняются отдельной backend-командой после проверки оснований.
       </div>
+      {!evidenceEnabled ? (
+        <div className="notice spacing-top-small">
+          Канал работает без файлов. Чтобы прикладывать фото и документы к сообщениям, подключите расширение «Доказательства» выше.
+        </div>
+      ) : null}
       {hasAcceptedAgreement ? (
         <div className="notice success spacing-top-small">
           Стороны зафиксировали соглашение. Новые предложения заблокированы; сообщения и доказательства остаются доступны до исполнения settlement.
@@ -214,7 +226,7 @@ export function DisputePanel({
       </div>
 
       <form className="form dispute-form spacing-top" onSubmit={submit}>
-        <div className="form-grid-3">
+        <div className={evidenceEnabled ? 'form-grid-3' : 'form-grid-2'}>
           <label className="field">
             <span>Роль в пилоте</span>
             <select value={actorRole} onChange={(event) => setActorRole(event.target.value)}>
@@ -229,13 +241,15 @@ export function DisputePanel({
               <option value="PROPOSAL" disabled={hasAcceptedAgreement}>Предложение урегулирования</option>
             </select>
           </label>
-          <label className="field">
-            <span>Приложить доказательство</span>
-            <select value={evidenceId} onChange={(event) => setEvidenceId(event.target.value)}>
-              <option value="">Без файла</option>
-              {evidence.map((item) => <option key={item.id} value={item.id}>{item.fileName}</option>)}
-            </select>
-          </label>
+          {evidenceEnabled ? (
+            <label className="field">
+              <span>Приложить доказательство</span>
+              <select value={evidenceId} onChange={(event) => setEvidenceId(event.target.value)}>
+                <option value="">Без файла</option>
+                {evidence.map((item) => <option key={item.id} value={item.id}>{item.fileName}</option>)}
+              </select>
+            </label>
+          ) : null}
         </div>
 
         {mode === 'PROPOSAL' ? (
