@@ -4,7 +4,8 @@ import {
   DealRole,
   DealStatus as PrismaDealStatus,
   DisputeMessageType,
-  Prisma
+  Prisma,
+  ProtectionPlan
 } from '@prisma/client';
 import { CreateDealDto } from './dto/create-deal.dto';
 import { DealStatus } from './deal-status.enum';
@@ -14,7 +15,8 @@ import { PrismaService } from '../prisma/prisma.service';
 const dealInclude = {
   payments: true,
   deliveries: true,
-  evidence: true
+  evidence: true,
+  disputeAssistance: true
 } satisfies Prisma.DealInclude;
 
 @Injectable()
@@ -22,7 +24,8 @@ export class DealsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateDealDto) {
-    const fee = this.calculateFee(dto.amountKzt);
+    const protectionPlan = (dto.protectionPlan ?? ProtectionPlan.BASIC) as ProtectionPlan;
+    const fee = this.calculateFee(dto.amountKzt, protectionPlan);
     const inspectionHours = dto.inspectionHours ?? Number(process.env.DEFAULT_INSPECTION_HOURS ?? 48);
     const status = this.toPrismaStatus(DealStatus.WAITING_BUYER);
 
@@ -33,10 +36,14 @@ export class DealsService {
         category: dto.category as DealCategory,
         amountKzt: dto.amountKzt,
         platformFeeKzt: fee,
+        protectionPlan,
         inspectionHours,
         status,
         events: {
-          create: this.eventData('deal.created', undefined, status, { title: dto.title })
+          create: this.eventData('deal.created', undefined, status, {
+            title: dto.title,
+            protectionPlan
+          })
         }
       },
       include: dealInclude
@@ -279,8 +286,12 @@ export class DealsService {
     return status as unknown as PrismaDealStatus;
   }
 
-  private calculateFee(amountKzt: number) {
-    const percent = Number(process.env.PLATFORM_FEE_PERCENT ?? 2);
+  private calculateFee(amountKzt: number, protectionPlan: ProtectionPlan) {
+    const percent = Number(
+      protectionPlan === ProtectionPlan.EXTENDED
+        ? process.env.EXTENDED_PROTECTION_FEE_PERCENT ?? 3
+        : process.env.PLATFORM_FEE_PERCENT ?? 2
+    );
     const min = Number(process.env.PLATFORM_FEE_MIN_KZT ?? 500);
     const max = Number(process.env.PLATFORM_FEE_MAX_KZT ?? 20000);
     return Math.min(max, Math.max(min, Math.round((amountKzt * percent) / 100)));
