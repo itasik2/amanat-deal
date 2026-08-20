@@ -1,6 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { DealExtensionType, DealRole } from '@prisma/client';
-import { ExtensionsService } from '../extensions/extensions.service';
+import { DealRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_PROVIDER, StorageProvider } from '../storage/storage.provider';
 
@@ -14,12 +13,11 @@ export type EvidenceUploadInput = {
 export class EvidenceService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly extensions: ExtensionsService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider
   ) {}
 
   async list(dealId: string) {
-    await this.ensureEvidenceExtension(dealId);
+    await this.ensureDeal(dealId);
     return this.prisma.evidenceFile.findMany({
       where: { dealId },
       orderBy: { createdAt: 'asc' }
@@ -27,7 +25,7 @@ export class EvidenceService {
   }
 
   async upload(dealId: string, file: Express.Multer.File | undefined, input: EvidenceUploadInput) {
-    await this.ensureEvidenceExtension(dealId);
+    await this.ensureDeal(dealId);
     if (!file) throw new BadRequestException('Evidence file is required');
     if (!file.originalname) throw new BadRequestException('Original file name is required');
 
@@ -71,7 +69,7 @@ export class EvidenceService {
   }
 
   async read(dealId: string, evidenceId: string) {
-    await this.ensureEvidenceExtension(dealId);
+    await this.ensureDeal(dealId);
     const evidence = await this.prisma.evidenceFile.findFirst({
       where: { id: evidenceId, dealId }
     });
@@ -81,14 +79,9 @@ export class EvidenceService {
     return { evidence, buffer };
   }
 
-  private async ensureEvidenceExtension(dealId: string) {
+  private async ensureDeal(dealId: string) {
     const exists = await this.prisma.deal.findUnique({ where: { id: dealId }, select: { id: true } });
     if (!exists) throw new NotFoundException('Deal not found');
-
-    const enabled = await this.extensions.isEnabled(dealId, DealExtensionType.EVIDENCE);
-    if (!enabled) {
-      throw new BadRequestException('Evidence extension is not enabled for this deal');
-    }
   }
 
   private parseRole(value?: string) {
