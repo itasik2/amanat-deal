@@ -15,7 +15,22 @@ Base path: `/api/v1`.
 - `POST /deals/:id/report-problem` — stops normal flow and moves deal to `PROBLEM_REPORTED`.
 - `GET /deals/:id/events` — immutable event timeline.
 
-## Evidence
+## Deal extensions
+
+Extensions are optional capabilities enabled per deal. Core deal and dispute flows must work without them.
+
+- `GET /deals/:id/extensions` — list enabled extensions.
+- `POST /deals/:id/extensions/:type/enable` — enable an extension and write `extension.enabled` to audit trail.
+
+Current extension types:
+
+- `EVIDENCE` — evidence files, hashes and evidence attachments in the dispute channel.
+
+Extensions are enabled once and are not disabled in the MVP, so an already-recorded audit/evidence trail cannot disappear from the deal.
+
+## Evidence extension
+
+Evidence endpoints are available only when `EVIDENCE` is enabled for the deal.
 
 - `GET /deals/:id/evidence` — list deal evidence and metadata.
 - `POST /deals/:id/evidence` — multipart upload (`file`, `kind`, `uploaderRole`, optional `note`).
@@ -25,10 +40,10 @@ The API computes SHA-256 on the server. The pilot stores files through `StorageP
 
 ## Dispute settlement channel
 
-Available for deals in `PROBLEM_REPORTED` or `WAITING_LEGAL_RESOLUTION`.
+Available for deals in `PROBLEM_REPORTED` or `WAITING_LEGAL_RESOLUTION`. The dispute channel itself is part of the core flow and works without the Evidence extension.
 
 - `GET /deals/:id/dispute/messages` — immutable negotiation history.
-- `POST /deals/:id/dispute/messages` — add a buyer/seller message and optionally attach evidence.
+- `POST /deals/:id/dispute/messages` — add a buyer/seller message. Evidence can be attached only when `EVIDENCE` is enabled.
 - `POST /deals/:id/dispute/proposals` — propose full refund, partial refund, release to seller, or custom settlement.
 - `POST /deals/:id/dispute/proposals/:proposalId/respond` — accept or reject a proposal.
 
@@ -59,4 +74,4 @@ npm run prisma:migrate
 npm run dev
 ```
 
-The current MVP still uses mock escrow, but deals, deliveries, payments, evidence, dispute messages and events persist in PostgreSQL instead of in-memory maps.
+The current MVP still uses mock escrow, but deals, deliveries, payments, optional extensions, evidence, dispute messages and events persist in PostgreSQL instead of in-memory maps.
