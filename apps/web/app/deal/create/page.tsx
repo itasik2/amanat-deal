@@ -5,6 +5,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 type DealCategory = 'GOODS' | 'SERVICE' | 'REPAIR' | 'EQUIPMENT' | 'OTHER';
+type ProtectionPlan = 'BASIC' | 'EXTENDED';
 
 type CreatedDeal = {
   id: string;
@@ -22,6 +23,7 @@ export default function CreateDealPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<DealCategory>('GOODS');
+  const [protectionPlan, setProtectionPlan] = useState<ProtectionPlan>('BASIC');
   const [amountKzt, setAmountKzt] = useState('');
   const [inspectionHours, setInspectionHours] = useState('48');
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +42,7 @@ export default function CreateDealPage() {
           title: title.trim(),
           description: description.trim(),
           category,
+          protectionPlan,
           amountKzt: Number(amountKzt),
           inspectionHours: Number(inspectionHours)
         })
@@ -67,7 +70,7 @@ export default function CreateDealPage() {
         <p className="eyebrow">Новая сделка</p>
         <h1>Зафиксировать условия</h1>
         <p className="muted">
-          Укажите предмет сделки, сумму и срок проверки. После создания появится карточка, которую в дальнейшем можно будет отправить второй стороне.
+          Укажите предмет сделки, сумму, уровень защиты и срок проверки. Доказательства и история событий собираются в любом тарифе.
         </p>
 
         <form className="form" onSubmit={submit}>
@@ -93,6 +96,20 @@ export default function CreateDealPage() {
               placeholder="Что именно передаётся или выполняется, состояние, комплектация и другие проверяемые условия"
             />
           </label>
+
+          <label className="field">
+            <span>Уровень защиты</span>
+            <select value={protectionPlan} onChange={(event) => setProtectionPlan(event.target.value as ProtectionPlan)}>
+              <option value="BASIC">Базовая защита · стандартная комиссия</option>
+              <option value="EXTENDED">Расширенная защита · усиленная фиксация и повышенный тариф</option>
+            </select>
+          </label>
+
+          <div className={protectionPlan === 'EXTENDED' ? 'notice warning' : 'notice'}>
+            {protectionPlan === 'EXTENDED'
+              ? 'Расширенная защита: усиленный сценарий фиксации состояния, упаковки, серийных данных и исполнения сделки. Доказательства всё равно принадлежат самой сделке, а не отдельной платной функции.'
+              : 'Базовая защита: условия, оплата, доставка, сообщения, audit trail и доказательства входят в сделку. Дополнительное сопровождение спора оплачивается отдельно только при необходимости.'}
+          </div>
 
           <div className="form-grid">
             <label className="field">
