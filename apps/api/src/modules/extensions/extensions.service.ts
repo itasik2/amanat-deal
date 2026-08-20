@@ -20,37 +20,29 @@ export class ExtensionsService {
     const actorRole = this.parseRole(actorRoleValue);
 
     return this.prisma.$transaction(async (tx) => {
-      const extension = await tx.dealExtension.upsert({
-        where: { dealId_type: { dealId, type } },
-        update: {},
-        create: {
+      const existing = await tx.dealExtension.findUnique({
+        where: { dealId_type: { dealId, type } }
+      });
+      if (existing) return existing;
+
+      const extension = await tx.dealExtension.create({
+        data: {
           dealId,
           type,
           enabledByRole: actorRole
         }
       });
 
-      const existingEvent = await tx.dealEvent.findFirst({
-        where: {
+      await tx.dealEvent.create({
+        data: {
           dealId,
+          actorRole,
           eventType: 'extension.enabled',
-          payload: { path: ['type'], equals: type }
-        },
-        select: { id: true }
+          fromStatus: deal.status,
+          toStatus: deal.status,
+          payload: { type }
+        }
       });
-
-      if (!existingEvent) {
-        await tx.dealEvent.create({
-          data: {
-            dealId,
-            actorRole,
-            eventType: 'extension.enabled',
-            fromStatus: deal.status,
-            toStatus: deal.status,
-            payload: { type }
-          }
-        });
-      }
 
       return extension;
     });
