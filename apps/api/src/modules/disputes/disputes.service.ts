@@ -8,8 +8,8 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-const allowedActorRoles = [DealRole.BUYER, DealRole.SELLER, DealRole.ADMIN];
-const disputeStatuses = [DealStatus.PROBLEM_REPORTED, DealStatus.WAITING_LEGAL_RESOLUTION];
+const allowedActorRoles: DealRole[] = [DealRole.BUYER, DealRole.SELLER, DealRole.ADMIN];
+const disputeStatuses: DealStatus[] = [DealStatus.PROBLEM_REPORTED, DealStatus.WAITING_LEGAL_RESOLUTION];
 
 export type DisputeMessageInput = {
   actorRole?: string;
