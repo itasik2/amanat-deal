@@ -12,10 +12,10 @@
     "build": "npm run build -ws --if-present",
     "lint": "npm run lint -ws --if-present",
     "test": "npm run test -ws --if-present",
-    "prisma:generate": "dotenv -e .env -- npm run prisma:generate -w packages/database",
-    "prisma:migrate": "dotenv -e .env -- npm run prisma:migrate -w packages/database",
-    "prisma:reset": "dotenv -e .env -- npx prisma migrate reset --schema packages/database/prisma/schema.prisma",
-    "prisma:studio": "dotenv -e .env -- npx prisma studio --schema packages/database/prisma/schema.prisma"
+    "prisma:generate": "dotenv -e .env -- prisma generate --schema packages/database/prisma/schema.prisma",
+    "prisma:migrate": "dotenv -e .env -- prisma migrate dev --schema packages/database/prisma/schema.prisma",
+    "prisma:reset": "dotenv -e .env -- prisma migrate reset --schema packages/database/prisma/schema.prisma",
+    "prisma:studio": "dotenv -e .env -- prisma studio --schema packages/database/prisma/schema.prisma"
   },
   "devDependencies": {
     "concurrently": "^9.0.0",
