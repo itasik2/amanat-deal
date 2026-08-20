@@ -28,6 +28,7 @@ type Deal = {
   category: string;
   amountKzt: number;
   platformFeeKzt: number;
+  protectionPlan: 'BASIC' | 'EXTENDED';
   inspectionHours: number;
   status: string;
   fundsSecuredAt: string | null;
@@ -64,6 +65,11 @@ const statusLabels: Record<string, string> = {
   WAITING_LEGAL_RESOLUTION: 'Ожидает урегулирования'
 };
 
+const protectionLabels: Record<string, string> = {
+  BASIC: 'Базовая защита',
+  EXTENDED: 'Расширенная защита'
+};
+
 const eventLabels: Record<string, string> = {
   'deal.created': 'Сделка создана',
   'deal.accepted': 'Условия приняты',
@@ -73,7 +79,10 @@ const eventLabels: Record<string, string> = {
   'delivery.delivered': 'Доставка подтверждена',
   'inspection.started': 'Начался срок проверки',
   'mock_escrow.release_to_seller': 'Mock-выплата продавцу',
-  'problem.reported': 'Зафиксирована проблема'
+  'problem.reported': 'Зафиксирована проблема',
+  'evidence.uploaded': 'Добавлено доказательство',
+  'dispute.assistance_requested': 'Запрошено сопровождение спора',
+  'dispute.settlement_agreed': 'Стороны зафиксировали соглашение'
 };
 
 function money(value: number) {
@@ -204,12 +213,13 @@ export default function DealPage() {
           </div>
           <div className="amount-block">
             <strong>{money(deal.amountKzt)}</strong>
-            <span>Комиссия MVP: {money(deal.platformFeeKzt)}</span>
+            <span>{protectionLabels[deal.protectionPlan] ?? deal.protectionPlan} · комиссия {money(deal.platformFeeKzt)}</span>
           </div>
         </div>
         <p className="deal-description">{deal.description}</p>
         <div className="meta-grid">
           <div><span>Категория</span><strong>{deal.category}</strong></div>
+          <div><span>Защита</span><strong>{protectionLabels[deal.protectionPlan] ?? deal.protectionPlan}</strong></div>
           <div><span>Срок проверки</span><strong>{deal.inspectionHours} ч.</strong></div>
           <div><span>Создана</span><strong>{dateTime(deal.createdAt)}</strong></div>
           <div><span>Проверка до</span><strong>{dateTime(deal.inspectionEndsAt)}</strong></div>
