@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import {
+  DisputeAssistanceRequestInput,
   DisputeMessageInput,
   DisputeProposalInput,
   DisputeResponseInput,
@@ -13,6 +14,16 @@ export class DisputesController {
   @Get(':id/dispute/messages')
   list(@Param('id') id: string) {
     return this.disputes.list(id);
+  }
+
+  @Get(':id/dispute/assistance')
+  assistance(@Param('id') id: string) {
+    return this.disputes.assistance(id);
+  }
+
+  @Post(':id/dispute/assistance/request')
+  requestAssistance(@Param('id') id: string, @Body() body: DisputeAssistanceRequestInput) {
+    return this.disputes.requestAssistance(id, body);
   }
 
   @Post(':id/dispute/messages')
