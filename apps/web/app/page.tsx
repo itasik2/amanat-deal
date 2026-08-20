@@ -9,6 +9,7 @@ type Deal = {
   title: string;
   amountKzt: number;
   platformFeeKzt: number;
+  protectionPlan: 'BASIC' | 'EXTENDED';
   status: string;
   createdAt: string;
 };
@@ -23,8 +24,14 @@ const statusLabels: Record<string, string> = {
   INSPECTION: 'Проверка',
   COMPLETED: 'Завершено',
   PROBLEM_REPORTED: 'Есть проблема',
+  WAITING_LEGAL_RESOLUTION: 'Урегулирование',
   CANCELLED: 'Отменено',
   EXPIRED: 'Истекло'
+};
+
+const protectionLabels: Record<string, string> = {
+  BASIC: 'Базовая защита',
+  EXTENDED: 'Расширенная защита'
 };
 
 function money(value: number) {
@@ -61,7 +68,7 @@ export default function HomePage() {
             <p className="eyebrow">Amanat Deal · пилот</p>
             <h1>Безопасная сделка с понятными правилами</h1>
             <p className="lead">
-              Условия фиксируются заранее, mock-escrow подтверждает резервирование средств, доставка и действия сторон попадают в историю сделки.
+              Условия, доказательства, оплата, доставка и сообщения фиксируются в истории сделки. Можно выбрать базовую или расширенную защиту.
             </p>
             <div className="actions">
               <Link className="button" href="/deal/create">Создать сделку</Link>
@@ -76,9 +83,9 @@ export default function HomePage() {
       </section>
 
       <section className="grid spacing-top">
-        <div className="card"><h3>Деньги</h3><p className="muted">Пока mock-escrow. Банковский provider подключим после проверки продуктовой логики.</p></div>
+        <div className="card"><h3>Защита</h3><p className="muted">Базовая и расширенная защита отличаются глубиной проверки, а доказательства собираются в обоих вариантах.</p></div>
         <div className="card"><h3>Условия</h3><p className="muted">У сделки есть предмет, сумма, срок проверки и неизменяемая история событий.</p></div>
-        <div className="card"><h3>Спор</h3><p className="muted">Платформа фиксирует проблему, но не изображает из себя суд в браузере.</p></div>
+        <div className="card"><h3>Спор</h3><p className="muted">Переговоры входят в сделку; сопровождение Amanat Deal можно запросить как отдельную услугу.</p></div>
       </section>
 
       <section className="spacing-top">
@@ -106,7 +113,7 @@ export default function HomePage() {
             <Link className="deal-row" href={`/deal/${deal.id}`} key={deal.id}>
               <div>
                 <strong>{deal.title}</strong>
-                <p className="muted small">{deal.publicCode}</p>
+                <p className="muted small">{deal.publicCode} · {protectionLabels[deal.protectionPlan] ?? deal.protectionPlan}</p>
               </div>
               <div className="deal-row-right">
                 <strong>{money(deal.amountKzt)}</strong>
