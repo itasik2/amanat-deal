@@ -38,8 +38,17 @@ enum DealRole {
   SYSTEM
 }
 
-enum DealExtensionType {
-  EVIDENCE
+enum ProtectionPlan {
+  BASIC
+  EXTENDED
+}
+
+enum DisputeAssistanceStatus {
+  REQUESTED
+  ACTIVE
+  SETTLEMENT_REACHED
+  CLOSED
+  CANCELLED
 }
 
 enum DisputeMessageType {
@@ -71,15 +80,16 @@ model User {
 }
 
 model Deal {
-  id                  String       @id @default(cuid())
-  publicCode          String       @unique @default(cuid())
+  id                  String         @id @default(cuid())
+  publicCode          String         @unique @default(cuid())
   title               String
   description         String
   category            DealCategory
   amountKzt           Int
   platformFeeKzt      Int
-  inspectionHours     Int          @default(48)
-  status              DealStatus   @default(DRAFT)
+  protectionPlan      ProtectionPlan @default(BASIC)
+  inspectionHours     Int            @default(48)
+  status              DealStatus     @default(DRAFT)
   sellerId            String?
   buyerId             String?
   acceptedBySellerAt  DateTime?
@@ -89,32 +99,18 @@ model Deal {
   deliveredAt         DateTime?
   inspectionEndsAt    DateTime?
   completedAt         DateTime?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 
-  seller          User?             @relation("SellerDeals", fields: [sellerId], references: [id])
-  buyer           User?             @relation("BuyerDeals", fields: [buyerId], references: [id])
-  terms           DealTerm[]
-  payments        Payment[]
-  deliveries      Delivery[]
-  extensions      DealExtension[]
-  evidence        EvidenceFile[]
-  events          DealEvent[]
-  disputeMessages DisputeMessage[]
-}
-
-model DealExtension {
-  id            String            @id @default(cuid())
-  dealId        String
-  type          DealExtensionType
-  enabledByRole DealRole          @default(SYSTEM)
-  config        Json?
-  enabledAt     DateTime          @default(now())
-
-  deal Deal @relation(fields: [dealId], references: [id])
-
-  @@unique([dealId, type])
-  @@index([dealId, enabledAt])
+  seller             User?              @relation("SellerDeals", fields: [sellerId], references: [id])
+  buyer              User?              @relation("BuyerDeals", fields: [buyerId], references: [id])
+  terms              DealTerm[]
+  payments           Payment[]
+  deliveries         Delivery[]
+  evidence           EvidenceFile[]
+  events             DealEvent[]
+  disputeMessages    DisputeMessage[]
+  disputeAssistance  DisputeAssistance?
 }
 
 model DealTerm {
@@ -195,6 +191,20 @@ model DisputeMessage {
 
   @@index([dealId, createdAt])
   @@index([proposalId])
+}
+
+model DisputeAssistance {
+  id              String                  @id @default(cuid())
+  dealId          String                  @unique
+  status          DisputeAssistanceStatus @default(REQUESTED)
+  requestedByRole DealRole
+  quotedFeeKzt    Int?
+  requestedAt     DateTime                @default(now())
+  activatedAt     DateTime?
+  closedAt        DateTime?
+  updatedAt       DateTime                @updatedAt
+
+  deal Deal @relation(fields: [dealId], references: [id])
 }
 
 model DealEvent {
