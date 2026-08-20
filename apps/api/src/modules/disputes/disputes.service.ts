@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import {
   DealRole,
   DealStatus,
+  DisputeAssistanceStatus,
   DisputeMessageType,
   SettlementType
 } from '@prisma/client';
@@ -27,6 +28,10 @@ export type DisputeResponseInput = {
   body?: string;
 };
 
+export type DisputeAssistanceRequestInput = {
+  actorRole?: string;
+};
+
 @Injectable()
 export class DisputesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -46,6 +51,43 @@ export class DisputesService {
           }
         }
       }
+    });
+  }
+
+  async assistance(dealId: string) {
+    await this.ensureDeal(dealId);
+    return this.prisma.disputeAssistance.findUnique({ where: { dealId } });
+  }
+
+  async requestAssistance(dealId: string, input: DisputeAssistanceRequestInput) {
+    const deal = await this.ensureDisputeDeal(dealId);
+    await this.ensureNoAcceptedSettlement(dealId);
+    const actorRole = this.parseActorRole(input.actorRole);
+
+    const existing = await this.prisma.disputeAssistance.findUnique({ where: { dealId } });
+    if (existing) return existing;
+
+    return this.prisma.$transaction(async (tx) => {
+      const assistance = await tx.disputeAssistance.create({
+        data: {
+          dealId,
+          requestedByRole: actorRole,
+          status: DisputeAssistanceStatus.REQUESTED
+        }
+      });
+
+      await tx.dealEvent.create({
+        data: {
+          dealId,
+          actorRole,
+          eventType: 'dispute.assistance_requested',
+          fromStatus: deal.status,
+          toStatus: deal.status,
+          payload: { assistanceId: assistance.id }
+        }
+      });
+
+      return assistance;
     });
   }
 
@@ -192,6 +234,16 @@ export class DisputesService {
           }
         }
       });
+
+      if (accepted) {
+        await tx.disputeAssistance.updateMany({
+          where: {
+            dealId,
+            status: { in: [DisputeAssistanceStatus.REQUESTED, DisputeAssistanceStatus.ACTIVE] }
+          },
+          data: { status: DisputeAssistanceStatus.SETTLEMENT_REACHED }
+        });
+      }
 
       return response;
     });
