@@ -20,11 +20,27 @@ type DisputeMessage = {
   evidence?: { id: string; fileName: string; sha256: string } | null;
 };
 
+type DisputeAssistance = {
+  id: string;
+  status: string;
+  requestedByRole: string;
+  quotedFeeKzt: number | null;
+  requestedAt: string;
+};
+
 const settlementLabels: Record<string, string> = {
   FULL_REFUND: 'Полный возврат покупателю',
   PARTIAL_REFUND: 'Частичный возврат покупателю',
   RELEASE_TO_SELLER: 'Выплата продавцу',
   CUSTOM: 'Иное соглашение'
+};
+
+const assistanceLabels: Record<string, string> = {
+  REQUESTED: 'Запрос принят',
+  ACTIVE: 'Сопровождение активно',
+  SETTLEMENT_REACHED: 'Соглашение достигнуто',
+  CLOSED: 'Сопровождение завершено',
+  CANCELLED: 'Запрос отменён'
 };
 
 function money(value: number | null) {
@@ -40,18 +56,17 @@ export function DisputePanel({
   dealId,
   dealStatus,
   dealAmountKzt,
-  evidenceEnabled,
   onChanged
 }: {
   dealId: string;
   dealStatus: string;
   dealAmountKzt: number;
-  evidenceEnabled: boolean;
   onChanged: () => void;
 }) {
   const enabled = ['PROBLEM_REPORTED', 'WAITING_LEGAL_RESOLUTION'].includes(dealStatus);
   const [messages, setMessages] = useState<DisputeMessage[]>([]);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
+  const [assistance, setAssistance] = useState<DisputeAssistance | null>(null);
   const [actorRole, setActorRole] = useState('BUYER');
   const [mode, setMode] = useState<'MESSAGE' | 'PROPOSAL'>('MESSAGE');
   const [body, setBody] = useState('');
@@ -73,17 +88,16 @@ export function DisputePanel({
   const load = useCallback(async () => {
     if (!enabled) return;
 
-    const messagesResponse = await fetch(`/api/backend/deals/${dealId}/dispute/messages`, { cache: 'no-store' });
-    if (messagesResponse.ok) setMessages((await messagesResponse.json()) as DisputeMessage[]);
+    const [messagesResponse, evidenceResponse, assistanceResponse] = await Promise.all([
+      fetch(`/api/backend/deals/${dealId}/dispute/messages`, { cache: 'no-store' }),
+      fetch(`/api/backend/deals/${dealId}/evidence`, { cache: 'no-store' }),
+      fetch(`/api/backend/deals/${dealId}/dispute/assistance`, { cache: 'no-store' })
+    ]);
 
-    if (evidenceEnabled) {
-      const evidenceResponse = await fetch(`/api/backend/deals/${dealId}/evidence`, { cache: 'no-store' });
-      if (evidenceResponse.ok) setEvidence((await evidenceResponse.json()) as Evidence[]);
-    } else {
-      setEvidence([]);
-      setEvidenceId('');
-    }
-  }, [dealId, enabled, evidenceEnabled]);
+    if (messagesResponse.ok) setMessages((await messagesResponse.json()) as DisputeMessage[]);
+    if (evidenceResponse.ok) setEvidence((await evidenceResponse.json()) as Evidence[]);
+    if (assistanceResponse.ok) setAssistance((await assistanceResponse.json()) as DisputeAssistance | null);
+  }, [dealId, enabled]);
 
   useEffect(() => {
     void load();
@@ -108,9 +122,9 @@ export function DisputePanel({
       const proposal = mode === 'PROPOSAL';
       const payload: Record<string, unknown> = {
         actorRole,
-        body: body.trim()
+        body: body.trim(),
+        evidenceId: evidenceId || undefined
       };
-      if (evidenceEnabled && evidenceId) payload.evidenceId = evidenceId;
       if (proposal) {
         payload.settlementType = settlementType;
         if (amountKzt.trim()) payload.amountKzt = Number(amountKzt);
@@ -163,6 +177,28 @@ export function DisputePanel({
     }
   }
 
+  async function requestAssistance() {
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/backend/deals/${dealId}/dispute/assistance/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorRole })
+      });
+      if (!response.ok) {
+        const responseBody = await response.json().catch(() => null);
+        throw new Error(responseBody?.message || `Ошибка API: ${response.status}`);
+      }
+      await load();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось запросить сопровождение');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const needsAmount = settlementType === 'PARTIAL_REFUND' || settlementType === 'CUSTOM';
 
   return (
@@ -172,17 +208,31 @@ export function DisputePanel({
           <p className="eyebrow">Урегулирование</p>
           <h2>Канал спора между сторонами</h2>
         </div>
-        <span className="muted small">Amanat Deal фиксирует переговоры, но не решает спор за стороны.</span>
+        <span className="muted small">Переговоры входят в сделку. Сопровождение Amanat Deal — отдельная услуга.</span>
       </div>
 
       <div className="notice warning">
         Принятие предложения фиксирует соглашение сторон. Фактический возврат или выплата выполняются отдельной backend-командой после проверки оснований.
       </div>
-      {!evidenceEnabled ? (
-        <div className="notice spacing-top-small">
-          Канал работает без файлов. Чтобы прикладывать фото и документы к сообщениям, подключите расширение «Доказательства» выше.
-        </div>
-      ) : null}
+
+      <div className="notice spacing-top-small">
+        {assistance ? (
+          <>
+            <strong>Сопровождение спора: {assistanceLabels[assistance.status] ?? assistance.status}.</strong>{' '}
+            {assistance.quotedFeeKzt !== null ? `Стоимость: ${money(assistance.quotedFeeKzt)}.` : 'Стоимость будет определена отдельно до активации услуги.'}
+          </>
+        ) : (
+          <>
+            Стороны могут договориться самостоятельно без доплаты. При необходимости можно запросить платное сопровождение: структурирование материалов, проверку полноты доказательств и помощь в фиксации соглашения.
+            <div className="spacing-top-small">
+              <button className="button secondary" disabled={busy || hasAcceptedAgreement} onClick={() => void requestAssistance()}>
+                Запросить сопровождение спора
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
       {hasAcceptedAgreement ? (
         <div className="notice success spacing-top-small">
           Стороны зафиксировали соглашение. Новые предложения заблокированы; сообщения и доказательства остаются доступны до исполнения settlement.
@@ -226,7 +276,7 @@ export function DisputePanel({
       </div>
 
       <form className="form dispute-form spacing-top" onSubmit={submit}>
-        <div className={evidenceEnabled ? 'form-grid-3' : 'form-grid-2'}>
+        <div className="form-grid-3">
           <label className="field">
             <span>Роль в пилоте</span>
             <select value={actorRole} onChange={(event) => setActorRole(event.target.value)}>
@@ -241,15 +291,13 @@ export function DisputePanel({
               <option value="PROPOSAL" disabled={hasAcceptedAgreement}>Предложение урегулирования</option>
             </select>
           </label>
-          {evidenceEnabled ? (
-            <label className="field">
-              <span>Приложить доказательство</span>
-              <select value={evidenceId} onChange={(event) => setEvidenceId(event.target.value)}>
-                <option value="">Без файла</option>
-                {evidence.map((item) => <option key={item.id} value={item.id}>{item.fileName}</option>)}
-              </select>
-            </label>
-          ) : null}
+          <label className="field">
+            <span>Приложить доказательство</span>
+            <select value={evidenceId} onChange={(event) => setEvidenceId(event.target.value)}>
+              <option value="">Без файла</option>
+              {evidence.map((item) => <option key={item.id} value={item.id}>{item.fileName}</option>)}
+            </select>
+          </label>
         </div>
 
         {mode === 'PROPOSAL' ? (
