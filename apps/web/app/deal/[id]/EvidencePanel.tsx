@@ -28,14 +28,12 @@ function formatDate(value: string) {
 
 export function EvidencePanel({
   dealId,
-  enabled,
-  onChanged,
-  onEnabled
+  protectionPlan,
+  onChanged
 }: {
   dealId: string;
-  enabled: boolean;
+  protectionPlan: 'BASIC' | 'EXTENDED';
   onChanged: () => void;
-  onEnabled: () => void;
 }) {
   const [items, setItems] = useState<Evidence[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -46,38 +44,13 @@ export function EvidencePanel({
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    if (!enabled) {
-      setItems([]);
-      return;
-    }
     const response = await fetch(`/api/backend/deals/${dealId}/evidence`, { cache: 'no-store' });
     if (response.ok) setItems((await response.json()) as Evidence[]);
-  }, [dealId, enabled]);
+  }, [dealId]);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  async function enableExtension() {
-    setBusy(true);
-    setError('');
-    try {
-      const response = await fetch(`/api/backend/deals/${dealId}/extensions/EVIDENCE/enable`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actorRole: 'SELLER' })
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.message || `Ошибка подключения: ${response.status}`);
-      }
-      onEnabled();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось подключить расширение');
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,37 +89,22 @@ export function EvidencePanel({
     }
   }
 
-  if (!enabled) {
-    return (
-      <section className="card spacing-top">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Расширение</p>
-            <h2>Доказательства сделки</h2>
-          </div>
-          <span className="status">Не подключено</span>
-        </div>
-        <p className="muted">
-          Базовая сделка работает без файлов. Подключите расширение, если нужно фиксировать фото, документы,
-          упаковку, серийные номера и другие материалы с серверным SHA-256.
-        </p>
-        {error ? <div className="notice error spacing-bottom">{error}</div> : null}
-        <button className="button" disabled={busy} onClick={() => void enableExtension()}>
-          {busy ? 'Подключение…' : 'Подключить доказательства'}
-        </button>
-      </section>
-    );
-  }
-
   return (
     <section className="card spacing-top">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Расширение · Evidence</p>
+          <p className="eyebrow">Доказательная база</p>
           <h2>Доказательства сделки</h2>
         </div>
-        <span className="muted small">Подключено · SHA-256 считается на сервере</span>
+        <span className="muted small">
+          {protectionPlan === 'EXTENDED' ? 'Расширенная защита' : 'Базовая защита'} · SHA-256 на сервере
+        </span>
       </div>
+
+      <p className="muted">
+        Фото, документы и другие материалы фиксируются в любом тарифе. Расширенная защита отличается не наличием доказательств,
+        а более строгим сценарием их сбора и проверки.
+      </p>
 
       <form className="form evidence-form" onSubmit={submit}>
         <div className="form-grid-3">
