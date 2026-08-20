@@ -4,7 +4,7 @@ Base path: `/api/v1`.
 
 ## Deals
 
-- `POST /deals` — create deal.
+- `POST /deals` — create deal. Optional `protectionPlan`: `BASIC` (default) or `EXTENDED`.
 - `GET /deals` — list deals.
 - `GET /deals/:id` — get deal.
 - `POST /deals/:id/accept` — buyer accepts terms.
@@ -15,22 +15,18 @@ Base path: `/api/v1`.
 - `POST /deals/:id/report-problem` — stops normal flow and moves deal to `PROBLEM_REPORTED`.
 - `GET /deals/:id/events` — immutable event timeline.
 
-## Deal extensions
+### Protection plans
 
-Extensions are optional capabilities enabled per deal. Core deal and dispute flows must work without them.
+Every deal includes terms, event history, dispute channel and evidence collection.
 
-- `GET /deals/:id/extensions` — list enabled extensions.
-- `POST /deals/:id/extensions/:type/enable` — enable an extension and write `extension.enabled` to audit trail.
+- `BASIC` — standard protected deal flow and standard fee (`PLATFORM_FEE_PERCENT`, default 2%).
+- `EXTENDED` — enhanced protection flow with a stricter evidence/checklist policy and a separate fee (`EXTENDED_PROTECTION_FEE_PERCENT`, default 3%).
 
-Current extension types:
+Evidence is not a paid extension by itself. The difference between plans is the level of required verification, guidance, storage/checklist policy and future enhanced controls.
 
-- `EVIDENCE` — evidence files, hashes and evidence attachments in the dispute channel.
+## Evidence
 
-Extensions are enabled once and are not disabled in the MVP, so an already-recorded audit/evidence trail cannot disappear from the deal.
-
-## Evidence extension
-
-Evidence endpoints are available only when `EVIDENCE` is enabled for the deal.
+Evidence is part of every deal:
 
 - `GET /deals/:id/evidence` — list deal evidence and metadata.
 - `POST /deals/:id/evidence` — multipart upload (`file`, `kind`, `uploaderRole`, optional `note`).
@@ -40,14 +36,23 @@ The API computes SHA-256 on the server. The pilot stores files through `StorageP
 
 ## Dispute settlement channel
 
-Available for deals in `PROBLEM_REPORTED` or `WAITING_LEGAL_RESOLUTION`. The dispute channel itself is part of the core flow and works without the Evidence extension.
+Available for deals in `PROBLEM_REPORTED` or `WAITING_LEGAL_RESOLUTION`.
 
 - `GET /deals/:id/dispute/messages` — immutable negotiation history.
-- `POST /deals/:id/dispute/messages` — add a buyer/seller message. Evidence can be attached only when `EVIDENCE` is enabled.
+- `POST /deals/:id/dispute/messages` — add a buyer/seller message and optionally attach evidence.
 - `POST /deals/:id/dispute/proposals` — propose full refund, partial refund, release to seller, or custom settlement.
 - `POST /deals/:id/dispute/proposals/:proposalId/respond` — accept or reject a proposal.
 
-Acceptance records a settlement agreement in the audit trail. It does **not** move money by itself. Release/refund will remain a separate backend/provider command.
+Acceptance records a settlement agreement in the audit trail. It does **not** move money by itself. Release/refund remains a separate backend/provider command.
+
+### Optional paid dispute assistance
+
+The negotiation channel itself is part of the deal. Amanat Deal assistance is a separate, optionally monetized service.
+
+- `GET /deals/:id/dispute/assistance` — current assistance request/status.
+- `POST /deals/:id/dispute/assistance/request` — request assistance for an active dispute.
+
+The request does not charge money automatically. `quotedFeeKzt` is nullable so pricing can be quoted/approved separately before activation. Assistance can later cover evidence completeness checks, chronology/summary preparation and structured settlement support without making Amanat Deal the judge of the dispute.
 
 ## Admin
 
@@ -74,4 +79,4 @@ npm run prisma:migrate
 npm run dev
 ```
 
-The current MVP still uses mock escrow, but deals, deliveries, payments, optional extensions, evidence, dispute messages and events persist in PostgreSQL instead of in-memory maps.
+The current MVP still uses mock escrow, but deals, deliveries, payments, evidence, dispute messages, dispute assistance requests and events persist in PostgreSQL instead of in-memory maps.
