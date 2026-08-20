@@ -12,6 +12,10 @@ for (const file of ['.env', '.env.local']) {
   }
 }
 
+if (process.env.DATABASE_URL && !process.env.DIRECT_URL) {
+  process.env.DIRECT_URL = process.env.DATABASE_URL;
+}
+
 const command = process.argv[2];
 const schema = 'packages/database/prisma/schema.prisma';
 
@@ -28,13 +32,16 @@ if (!args) {
   process.exit(1);
 }
 
-if (command !== 'generate' && !process.env.DATABASE_URL) {
+if (!process.env.DATABASE_URL) {
   console.error('\nDATABASE_URL is not set.');
-  console.error(`Expected it in ${resolve(root, '.env')} or in the process environment.`);
-  console.error('For the local Docker database, create the env file with:');
-  console.error('  cp .env.example .env');
-  console.error('Then verify without printing the secret:');
-  console.error("  grep -q '^DATABASE_URL=' .env && echo 'DATABASE_URL: OK'");
+  console.error(`Expected it in ${resolve(root, '.env')}, .env.local, or the process environment.`);
+  process.exit(1);
+}
+
+if (command !== 'generate' && !process.env.DIRECT_URL) {
+  console.error('\nDIRECT_URL is not set.');
+  console.error('For Neon, use the non-pooled connection string for DIRECT_URL.');
+  console.error('For a local PostgreSQL database, DIRECT_URL may be the same as DATABASE_URL.');
   process.exit(1);
 }
 
