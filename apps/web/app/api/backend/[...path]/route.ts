@@ -7,7 +7,8 @@ type RouteContext = {
 async function proxy(request: Request, context: RouteContext) {
   const { path } = await context.params;
   const sourceUrl = new URL(request.url);
-  const targetUrl = `${API_INTERNAL_URL}/${path.map(encodeURIComponent).join('/')}${sourceUrl.search}`;
+  const targetPath = path.map(encodeURIComponent).join('/');
+  const targetUrl = `${API_INTERNAL_URL}/${targetPath}${sourceUrl.search}`;
 
   const headers = new Headers();
   const contentType = request.headers.get('content-type');
@@ -33,7 +34,24 @@ async function proxy(request: Request, context: RouteContext) {
     if (disposition) responseHeaders.set('content-disposition', disposition);
     if (sha256) responseHeaders.set('x-evidence-sha256', sha256);
 
-    return new Response(await upstream.arrayBuffer(), {
+    const body = await upstream.arrayBuffer();
+
+    if (
+      upstream.ok &&
+      request.method !== 'HEAD' &&
+      body.byteLength === 0
+    ) {
+      console.error(`Amanat API proxy received empty success response: ${request.method} /${targetPath} -> ${upstream.status}`);
+      return Response.json(
+        {
+          statusCode: 502,
+          message: `Backend API вернул пустой успешный ответ для ${request.method} /${targetPath}`
+        },
+        { status: 502 }
+      );
+    }
+
+    return new Response(body, {
       status: upstream.status,
       headers: responseHeaders
     });
