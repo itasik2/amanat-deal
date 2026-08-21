@@ -21,6 +21,11 @@ export class EvidenceController {
     return this.evidence.list(id);
   }
 
+  @Get(':id/protection-checklist')
+  checklist(@Param('id') id: string) {
+    return this.evidence.checklist(id);
+  }
+
   @Post(':id/evidence')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024 } }))
   upload(
