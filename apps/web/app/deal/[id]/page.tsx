@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { EvidencePanel } from './EvidencePanel';
 import { DisputePanel } from './DisputePanel';
 
-type DealRole = 'SELLER' | 'BUYER';
+type DealRole = 'SELLER' | 'BUYER' | 'ADMIN';
 
 type Payment = {
   id: string;
@@ -85,12 +85,17 @@ const eventLabels: Record<string, string> = {
   'mock_escrow.release_to_seller': 'Mock-выплата продавцу',
   'problem.reported': 'Зафиксирована проблема',
   'evidence.uploaded': 'Добавлено доказательство',
+  'dispute.message_added': 'Добавлено сообщение в споре',
+  'dispute.proposal_created': 'Создано предложение урегулирования',
+  'dispute.proposal_rejected': 'Предложение урегулирования отклонено',
   'dispute.assistance_requested': 'Запрошено сопровождение спора',
   'dispute.settlement_agreed': 'Стороны зафиксировали соглашение'
 };
 
 function roleLabel(role: DealRole) {
-  return role === 'SELLER' ? 'Продавец' : 'Покупатель';
+  if (role === 'SELLER') return 'Продавец';
+  if (role === 'BUYER') return 'Покупатель';
+  return 'Админ';
 }
 
 function money(value: number) {
@@ -208,9 +213,18 @@ export default function DealPage() {
 
   const delivery = deal.deliveries.at(-1);
   const payment = deal.payments.at(-1);
-  const canReportProblem = ['WAITING_SHIPMENT', 'SHIPPED', 'DELIVERED', 'INSPECTION'].includes(deal.status);
+  const canReportProblem = activeRole !== 'ADMIN' && ['WAITING_SHIPMENT', 'SHIPPED', 'DELIVERED', 'INSPECTION'].includes(deal.status);
 
   function roleAction() {
+    if (activeRole === 'ADMIN') {
+      return (
+        <div className="role-waiting admin-context">
+          <strong>Режим оператора.</strong>
+          <span>Админ контролирует статус, оплату, доставку, доказательства, историю и спор, но не выполняет действия за покупателя или продавца.</span>
+        </div>
+      );
+    }
+
     if (deal.status === 'COMPLETED') {
       return <div className="notice success">Сделка завершена. Выплата продавцу зафиксирована в истории.</div>;
     }
@@ -259,7 +273,7 @@ export default function DealPage() {
 
     if (activeRole === 'SELLER') {
       if (deal.status === 'WAITING_BUYER') {
-        return <div className="role-waiting"><strong>Ждём покупателя.</strong><span>Покупатель должен открыть свою вкладку и принять условия.</span></div>;
+        return <div className="role-waiting"><strong>Ждём покупателя.</strong><span>Покупатель должен принять условия сделки.</span></div>;
       }
       if (deal.status === 'WAITING_PAYMENT') {
         return <div className="role-waiting"><strong>Ждём оплату.</strong><span>После резервирования средств продавцу откроется этап отправки.</span></div>;
@@ -323,37 +337,29 @@ export default function DealPage() {
 
       <section className="card role-switch-card spacing-top">
         <div>
-          <p className="eyebrow">Роль в сделке</p>
-          <h2>Кто вы в этой сделке?</h2>
-          <p className="muted">В пилоте роль переключается вручную. После авторизации система определит её автоматически.</p>
+          <p className="eyebrow">Пилотный стенд ролей</p>
+          <h2>Просмотр сделки</h2>
+          <p className="muted">Сейчас можно переключать три роли для тестирования. В рабочей версии пользователь увидит только свою роль, а админ будет работать в отдельном кабинете.</p>
         </div>
-        <div className="role-tabs" role="tablist" aria-label="Роль в сделке">
-          <button
-            className={`role-tab ${activeRole === 'SELLER' ? 'active' : ''}`}
-            type="button"
-            role="tab"
-            aria-selected={activeRole === 'SELLER'}
-            onClick={() => setActiveRole('SELLER')}
-          >
+        <div className="role-tabs" role="tablist" aria-label="Режим просмотра сделки">
+          <button className={`role-tab ${activeRole === 'SELLER' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'SELLER'} onClick={() => setActiveRole('SELLER')}>
             <span>Продавец</span>
-            <small>Условия · доказательства · отправка</small>
+            <small>Доказательства · отправка · ожидание выплаты</small>
           </button>
-          <button
-            className={`role-tab ${activeRole === 'BUYER' ? 'active' : ''}`}
-            type="button"
-            role="tab"
-            aria-selected={activeRole === 'BUYER'}
-            onClick={() => setActiveRole('BUYER')}
-          >
+          <button className={`role-tab ${activeRole === 'BUYER' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'BUYER'} onClick={() => setActiveRole('BUYER')}>
             <span>Покупатель</span>
-            <small>Принятие · оплата · проверка</small>
+            <small>Принятие · оплата · получение · проверка</small>
+          </button>
+          <button className={`role-tab ${activeRole === 'ADMIN' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'ADMIN'} onClick={() => setActiveRole('ADMIN')}>
+            <span>Админ</span>
+            <small>Контроль · аудит · доказательства · спор</small>
           </button>
         </div>
       </section>
 
       <div className="two-column spacing-top">
-        <section className="card role-action-card">
-          <p className="eyebrow">{roleLabel(activeRole)} · следующее действие</p>
+        <section className={`card role-action-card ${activeRole === 'ADMIN' ? 'admin-action-card' : ''}`}>
+          <p className="eyebrow">{roleLabel(activeRole)} · текущий контекст</p>
           <h2>{statusLabels[deal.status] ?? deal.status}</h2>
           {roleAction()}
 
@@ -372,7 +378,7 @@ export default function DealPage() {
         </section>
 
         <section className="card">
-          <p className="eyebrow">Общее для обеих сторон</p>
+          <p className="eyebrow">Общее состояние</p>
           <h2>Расчёты и доставка</h2>
           <dl className="facts">
             <div><dt>Mock-escrow</dt><dd>{payment ? payment.status : 'Нет платежа'}</dd></div>
@@ -385,20 +391,9 @@ export default function DealPage() {
         </section>
       </div>
 
-      <EvidencePanel
-        dealId={deal.id}
-        protectionPlan={deal.protectionPlan}
-        activeRole={activeRole}
-        onChanged={() => void load()}
-      />
+      <EvidencePanel dealId={deal.id} protectionPlan={deal.protectionPlan} activeRole={activeRole} onChanged={() => void load()} />
 
-      <DisputePanel
-        dealId={deal.id}
-        dealStatus={deal.status}
-        dealAmountKzt={deal.amountKzt}
-        activeRole={activeRole}
-        onChanged={() => void load()}
-      />
+      <DisputePanel dealId={deal.id} dealStatus={deal.status} dealAmountKzt={deal.amountKzt} activeRole={activeRole} onChanged={() => void load()} />
 
       <section className="card spacing-top">
         <div className="section-heading">
