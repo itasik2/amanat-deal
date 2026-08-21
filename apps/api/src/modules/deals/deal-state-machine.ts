@@ -2,16 +2,16 @@ import { BadRequestException } from '@nestjs/common';
 import { DealStatus } from './deal-status.enum';
 
 const allowedTransitions: Record<DealStatus, DealStatus[]> = {
-  [DealStatus.DRAFT]: [DealStatus.WAITING_BUYER, DealStatus.CANCELLED],
-  [DealStatus.WAITING_BUYER]: [DealStatus.WAITING_PAYMENT, DealStatus.CANCELLED, DealStatus.EXPIRED],
+  [DealStatus.DRAFT]: [DealStatus.WAITING_COUNTERPARTY, DealStatus.CANCELLED],
+  [DealStatus.WAITING_COUNTERPARTY]: [DealStatus.WAITING_PAYMENT, DealStatus.CANCELLED, DealStatus.EXPIRED],
   [DealStatus.WAITING_PAYMENT]: [DealStatus.FUNDS_SECURED, DealStatus.CANCELLED, DealStatus.EXPIRED],
   [DealStatus.FUNDS_SECURED]: [DealStatus.WAITING_SHIPMENT, DealStatus.PROBLEM_REPORTED],
   [DealStatus.WAITING_SHIPMENT]: [DealStatus.SHIPPED, DealStatus.PROBLEM_REPORTED, DealStatus.EXPIRED],
   [DealStatus.SHIPPED]: [DealStatus.DELIVERED, DealStatus.PROBLEM_REPORTED],
   [DealStatus.DELIVERED]: [DealStatus.INSPECTION, DealStatus.PROBLEM_REPORTED],
-  [DealStatus.INSPECTION]: [DealStatus.COMPLETED, DealStatus.PROBLEM_REPORTED],
   [DealStatus.PROBLEM_REPORTED]: [DealStatus.WAITING_LEGAL_RESOLUTION, DealStatus.COMPLETED, DealStatus.CANCELLED],
   [DealStatus.WAITING_LEGAL_RESOLUTION]: [DealStatus.COMPLETED, DealStatus.CANCELLED],
+  [DealStatus.INSPECTION]: [DealStatus.COMPLETED, DealStatus.PROBLEM_REPORTED],
   [DealStatus.COMPLETED]: [],
   [DealStatus.CANCELLED]: [],
   [DealStatus.EXPIRED]: []
