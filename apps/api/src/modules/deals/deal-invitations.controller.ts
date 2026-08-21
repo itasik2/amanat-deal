@@ -7,11 +7,11 @@ export class DealInvitationsController {
 
   @Get(':token/preview')
   preview(@Param('token') token: string) {
-    return this.deals.invitationPreview(token);
+    return this.deals.invitationByToken(token);
   }
 
   @Post(':token/claim')
   claim(@Param('token') token: string) {
-    return this.deals.claimInvitation(token);
+    return this.deals.claimInvitationByToken(token);
   }
 }
