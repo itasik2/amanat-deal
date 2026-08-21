@@ -15,7 +15,7 @@ type Deal = {
 };
 
 const statusLabels: Record<string, string> = {
-  WAITING_BUYER: 'Ожидает покупателя',
+  WAITING_COUNTERPARTY: 'Ожидает вторую сторону',
   WAITING_PAYMENT: 'Ожидает оплаты',
   FUNDS_SECURED: 'Средства зарезервированы',
   WAITING_SHIPMENT: 'Ожидает отправки',
@@ -68,33 +68,36 @@ export default function HomePage() {
             <p className="eyebrow">Amanat Deal · пилот</p>
             <h1>Безопасная сделка с понятными правилами</h1>
             <p className="lead">
-              Условия, доказательства, оплата, доставка и сообщения фиксируются в истории сделки. Можно выбрать базовую или расширенную защиту.
+              Создайте защищённую сделку или присоединитесь к уже созданной по ссылке либо короткому коду. Роль второй стороны определяется автоматически.
             </p>
             <div className="actions">
               <Link className="button" href="/deal/create">Создать сделку</Link>
-              <button className="button secondary" onClick={() => void loadDeals()}>Обновить список</button>
+              <Link className="button secondary" href="/join">Присоединиться</Link>
             </div>
           </div>
           <div className="pilot-note">
             <strong>Сейчас это пилот</strong>
-            <span>Реальные деньги не принимаются. Платёжный этап имитируется mock-escrow.</span>
+            <span>Реальные деньги не принимаются. Платёжный этап имитируется mock-escrow, а роли пока можно дополнительно проверить через тестовые вкладки.</span>
           </div>
         </div>
       </section>
 
       <section className="grid spacing-top">
-        <div className="card"><h3>Защита</h3><p className="muted">Базовая и расширенная защита отличаются глубиной проверки, а доказательства собираются в обоих вариантах.</p></div>
-        <div className="card"><h3>Условия</h3><p className="muted">У сделки есть предмет, сумма, срок проверки и неизменяемая история событий.</p></div>
-        <div className="card"><h3>Спор</h3><p className="muted">Переговоры входят в сделку; сопровождение Amanat Deal можно запросить как отдельную услугу.</p></div>
+        <div className="card"><h3>1. Создание</h3><p className="muted">Создатель выбирает свою роль, фиксирует условия и получает приглашение для второй стороны.</p></div>
+        <div className="card"><h3>2. Присоединение</h3><p className="muted">Вторая сторона открывает защищённую ссылку или вводит короткий код и проверяет условия до вступления.</p></div>
+        <div className="card"><h3>3. Защита</h3><p className="muted">После принятия условий запускаются оплата, доказательства, доставка, проверка и при необходимости урегулирование.</p></div>
       </section>
 
       <section className="spacing-top">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">PostgreSQL</p>
+            <p className="eyebrow">Dev / test</p>
             <h2>Тестовые сделки</h2>
           </div>
-          <span className="muted small">{deals.length} шт.</span>
+          <div className="actions">
+            <span className="muted small">{deals.length} шт.</span>
+            <button className="text-button" onClick={() => void loadDeals()}>Обновить</button>
+          </div>
         </div>
 
         {error ? <div className="notice error">{error}</div> : null}
@@ -103,7 +106,7 @@ export default function HomePage() {
         {!loading && deals.length === 0 ? (
           <div className="card empty-state">
             <h3>Сделок пока нет</h3>
-            <p className="muted">Создайте первую тестовую сделку и пройдите весь сценарий в браузере.</p>
+            <p className="muted">Создайте первую тестовую сделку и пригласите вторую сторону.</p>
             <Link className="button" href="/deal/create">Создать первую</Link>
           </div>
         ) : null}
