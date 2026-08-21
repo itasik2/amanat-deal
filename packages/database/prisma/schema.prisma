@@ -10,7 +10,7 @@ datasource db {
 
 enum DealStatus {
   DRAFT
-  WAITING_BUYER
+  WAITING_COUNTERPARTY
   WAITING_PAYMENT
   FUNDS_SECURED
   WAITING_SHIPMENT
@@ -37,6 +37,11 @@ enum DealRole {
   BUYER
   ADMIN
   SYSTEM
+}
+
+enum PartyRole {
+  SELLER
+  BUYER
 }
 
 enum ProtectionPlan {
@@ -89,6 +94,7 @@ model Deal {
   amountKzt           Int
   platformFeeKzt      Int
   protectionPlan      ProtectionPlan @default(BASIC)
+  creatorRole         PartyRole?
   inspectionHours     Int            @default(48)
   status              DealStatus     @default(DRAFT)
   sellerId            String?
@@ -112,6 +118,25 @@ model Deal {
   events             DealEvent[]
   disputeMessages    DisputeMessage[]
   disputeAssistance  DisputeAssistance?
+  invitations        DealInvitation[]
+}
+
+model DealInvitation {
+  id          String    @id @default(cuid())
+  dealId      String
+  invitedRole PartyRole
+  tokenHash   String    @unique
+  shortCode   String    @unique
+  expiresAt   DateTime
+  claimedAt   DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([dealId, createdAt])
+  @@index([shortCode, expiresAt])
 }
 
 model DealTerm {
