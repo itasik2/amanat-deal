@@ -10,6 +10,7 @@ import {
 import { CreateDealDto } from './dto/create-deal.dto';
 import { DealStatus } from './deal-status.enum';
 import { assertCanTransition } from './deal-state-machine';
+import { missingRequiredEvidence, ProtectionStage } from '../evidence/protection-checklist';
 import { PrismaService } from '../prisma/prisma.service';
 
 const dealInclude = {
@@ -119,6 +120,7 @@ export class DealsService {
   }
 
   async markShipped(id: string, shipment: { carrier?: string; trackingNumber?: string }) {
+    await this.assertProtectionEvidence(id, 'PRE_SHIPMENT');
     const shippedStatus = this.toPrismaStatus(DealStatus.SHIPPED);
 
     await this.prisma.$transaction(async (tx) => {
@@ -176,6 +178,9 @@ export class DealsService {
   }
 
   async complete(id: string, reason: string) {
+    if (reason === 'buyer_confirmed') {
+      await this.assertProtectionEvidence(id, 'RECEIPT');
+    }
     return this.transition(id, DealStatus.COMPLETED, 'mock_escrow.release_to_seller', { reason }, {
       completedAt: new Date()
     });
@@ -222,6 +227,36 @@ export class DealsService {
       where: { dealId: id },
       orderBy: { createdAt: 'asc' }
     });
+  }
+
+  private async assertProtectionEvidence(id: string, stage: ProtectionStage) {
+    const deal = await this.prisma.deal.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        category: true,
+        protectionPlan: true,
+        evidence: {
+          select: {
+            uploaderRole: true,
+            kind: true
+          }
+        }
+      }
+    });
+    if (!deal) throw new NotFoundException('Deal not found');
+
+    const missing = missingRequiredEvidence(
+      deal.category,
+      deal.protectionPlan,
+      deal.evidence,
+      stage
+    );
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Расширенная защита: добавьте обязательные доказательства: ${missing.map((item) => item.label).join('; ')}`
+      );
+    }
   }
 
   private async transition(
