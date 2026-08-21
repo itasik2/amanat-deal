@@ -1,10 +1,20 @@
-# Deal state machine v0.1
+# Deal state machine v0.2
 
 ## Основной поток
 
 ```text
-DRAFT -> WAITING_BUYER -> WAITING_PAYMENT -> FUNDS_SECURED -> WAITING_SHIPMENT -> SHIPPED -> DELIVERED -> INSPECTION -> COMPLETED
+DRAFT -> WAITING_COUNTERPARTY -> WAITING_PAYMENT -> FUNDS_SECURED -> WAITING_SHIPMENT -> SHIPPED -> DELIVERED -> INSPECTION -> COMPLETED
 ```
+
+`WAITING_COUNTERPARTY` нейтрален к роли создателя. Сделку может создать продавец или покупатель; противоположная роль получает приглашение.
+
+## Вход второй стороны
+
+1. Создатель выбирает `SELLER` или `BUYER` и тем самым фиксирует свою сторону условий.
+2. Amanat Deal создаёт одноразовое приглашение для противоположной роли.
+3. Вторая сторона открывает preview по invite token или короткому коду.
+4. После claim роль считается занятой, но статус остаётся `WAITING_COUNTERPARTY` до явного принятия условий приглашённой стороной.
+5. Когда обе стороны приняли условия, сделка переходит в `WAITING_PAYMENT`.
 
 ## Альтернативные статусы
 
@@ -19,4 +29,6 @@ DRAFT -> WAITING_BUYER -> WAITING_PAYMENT -> FUNDS_SECURED -> WAITING_SHIPMENT -
 - Нельзя изменить условия после принятия обеими сторонами без новой версии условий.
 - Нельзя завершить сделку, если есть активный `PROBLEM_REPORTED`.
 - Автоматическое завершение возможно только после `DELIVERED/INSPECTION` и отсутствия проблемы.
-- Все переходы пишутся в audit log.
+- Invite token хранится только в виде hash; короткий код является отдельным идентификатором входа.
+- Все create/claim/reissue/revoke события приглашений пишутся в audit log.
+- Все переходы сделки пишутся в audit log.
