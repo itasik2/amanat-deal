@@ -1,5 +1,5 @@
-import { createHash, randomBytes } from 'node:crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   DealCategory,
   DealRole,
@@ -19,7 +19,11 @@ const dealInclude = {
   payments: true,
   deliveries: true,
   evidence: true,
-  disputeAssistance: true
+  disputeAssistance: true,
+  invitations: {
+    orderBy: { createdAt: 'desc' as const },
+    take: 1
+  }
 } satisfies Prisma.DealInclude;
 
 const SHORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -30,16 +34,16 @@ export class DealsService {
 
   async create(dto: CreateDealDto) {
     const protectionPlan = (dto.protectionPlan ?? ProtectionPlan.BASIC) as ProtectionPlan;
-    const creatorRole = dto.creatorRole as PartyRole;
-    const invitedRole = this.oppositeRole(creatorRole);
+    const creatorRole = this.parsePartyRole(dto.creatorRole ?? PartyRole.SELLER);
     const fee = this.calculateFee(dto.amountKzt, protectionPlan);
     const inspectionHours = dto.inspectionHours ?? Number(process.env.DEFAULT_INSPECTION_HOURS ?? 48);
     const status = this.toPrismaStatus(DealStatus.WAITING_COUNTERPARTY);
+    const invitedRole = this.oppositeRole(creatorRole);
     const token = this.createInviteToken();
     const tokenHash = this.hashToken(token);
     const shortCode = await this.createUniqueShortCode();
     const expiresAt = this.invitationExpiry();
-    const acceptedAt = new Date();
+    const now = new Date();
 
     const deal = await this.prisma.deal.create({
       data: {
@@ -49,11 +53,11 @@ export class DealsService {
         amountKzt: dto.amountKzt,
         platformFeeKzt: fee,
         protectionPlan,
-        creatorRole,
         inspectionHours,
         status,
-        acceptedBySellerAt: creatorRole === PartyRole.SELLER ? acceptedAt : undefined,
-        acceptedByBuyerAt: creatorRole === PartyRole.BUYER ? acceptedAt : undefined,
+        creatorRole,
+        acceptedBySellerAt: creatorRole === PartyRole.SELLER ? now : undefined,
+        acceptedByBuyerAt: creatorRole === PartyRole.BUYER ? now : undefined,
         invitations: {
           create: {
             invitedRole,
@@ -63,18 +67,13 @@ export class DealsService {
           }
         },
         events: {
-          create: [
-            this.eventData('deal.created', undefined, status, {
-              title: dto.title,
-              protectionPlan,
-              creatorRole
-            }),
-            this.eventData('deal.invitation_created', status, status, {
-              invitedRole,
-              shortCode,
-              expiresAt: expiresAt.toISOString()
-            })
-          ]
+          create: this.eventData('deal.created', undefined, status, {
+            title: dto.title,
+            protectionPlan,
+            creatorRole,
+            invitedRole,
+            invitationExpiresAt: expiresAt.toISOString()
+          })
         }
       },
       include: dealInclude
@@ -82,7 +81,10 @@ export class DealsService {
 
     return {
       ...deal,
-      invitation: this.publicInvitation({ invitedRole, shortCode, expiresAt }, token)
+      invitation: this.publicInvitation(
+        { invitedRole, shortCode, expiresAt },
+        token
+      )
     };
   }
 
@@ -103,62 +105,34 @@ export class DealsService {
     return deal;
   }
 
-  async accept(id: string, actorRoleInput?: string) {
-    const role = this.parsePartyRole(actorRoleInput ?? 'BUYER');
-    const now = new Date();
-
+  async accept(id: string, actorRole?: string) {
     const deal = await this.prisma.deal.findUnique({ where: { id } });
     if (!deal) throw new NotFoundException('Deal not found');
 
-    // Existing pilot deals predate creatorRole. Preserve their old one-click buyer acceptance flow.
-    if (!deal.creatorRole) {
+    if (deal.creatorRole) {
+      const role = this.parsePartyRole(actorRole ?? '');
+      if (deal.status !== this.toPrismaStatus(DealStatus.WAITING_COUNTERPARTY)) {
+        throw new BadRequestException('Deal is not waiting for the counterparty');
+      }
+      if (role === deal.creatorRole) {
+        throw new BadRequestException('The creator has already accepted the deal terms');
+      }
       return this.transition(id, DealStatus.WAITING_PAYMENT, 'deal.accepted', { actorRole: role }, {
-        acceptedByBuyerAt: role === PartyRole.BUYER ? now : undefined,
-        acceptedBySellerAt: role === PartyRole.SELLER ? now : undefined
+        acceptedBySellerAt: role === PartyRole.SELLER ? new Date() : undefined,
+        acceptedByBuyerAt: role === PartyRole.BUYER ? new Date() : undefined
       });
     }
 
-    if (deal.status !== this.toPrismaStatus(DealStatus.WAITING_COUNTERPARTY)) {
-      throw new BadRequestException('Deal is not waiting for the counterparty');
-    }
-
-    const alreadyAccepted = role === PartyRole.SELLER ? deal.acceptedBySellerAt : deal.acceptedByBuyerAt;
-    if (alreadyAccepted) return this.get(id);
-
-    const sellerAccepted = Boolean(deal.acceptedBySellerAt) || role === PartyRole.SELLER;
-    const buyerAccepted = Boolean(deal.acceptedByBuyerAt) || role === PartyRole.BUYER;
-    const readyForPayment = sellerAccepted && buyerAccepted;
-    const nextStatus = readyForPayment
-      ? this.toPrismaStatus(DealStatus.WAITING_PAYMENT)
-      : deal.status;
-
-    if (readyForPayment) {
-      assertCanTransition(this.toLocalStatus(deal.status), DealStatus.WAITING_PAYMENT);
-    }
-
-    await this.prisma.deal.update({
-      where: { id },
-      data: {
-        acceptedBySellerAt: role === PartyRole.SELLER ? now : undefined,
-        acceptedByBuyerAt: role === PartyRole.BUYER ? now : undefined,
-        status: nextStatus,
-        events: {
-          create: this.eventData(
-            readyForPayment ? 'deal.accepted' : 'deal.party_accepted',
-            deal.status,
-            nextStatus,
-            { actorRole: role }
-          )
-        }
-      }
+    // Legacy pilot deals created before counterparty invitations.
+    return this.transition(id, DealStatus.WAITING_PAYMENT, 'deal.accepted', undefined, {
+      acceptedByBuyerAt: new Date()
     });
-
-    return this.get(id);
   }
 
-  async invitationPreview(token: string) {
+  async invitationByToken(token: string) {
+    const tokenHash = this.hashToken(token);
     const invitation = await this.prisma.dealInvitation.findUnique({
-      where: { tokenHash: this.hashToken(token) },
+      where: { tokenHash },
       include: { deal: true }
     });
     if (!invitation) throw new NotFoundException('Invitation not found');
@@ -166,7 +140,7 @@ export class DealsService {
     return this.invitationPreviewPayload(invitation);
   }
 
-  async invitationPreviewByCode(inputCode: string) {
+  async invitationByCode(inputCode: string) {
     const shortCode = this.normalizeShortCode(inputCode);
     const invitation = await this.prisma.dealInvitation.findUnique({
       where: { shortCode },
@@ -177,9 +151,10 @@ export class DealsService {
     return this.invitationPreviewPayload(invitation);
   }
 
-  async claimInvitation(token: string) {
+  async claimInvitationByToken(token: string) {
+    const tokenHash = this.hashToken(token);
     const invitation = await this.prisma.dealInvitation.findUnique({
-      where: { tokenHash: this.hashToken(token) },
+      where: { tokenHash },
       include: { deal: true }
     });
     if (!invitation) throw new NotFoundException('Invitation not found');
@@ -221,7 +196,7 @@ export class DealsService {
       });
       await tx.dealEvent.create({
         data: {
-          dealId,
+          deal: { connect: { id: dealId } },
           ...this.eventData('deal.invitation_reissued', deal.status, deal.status, {
             invitedRole,
             shortCode,
@@ -391,7 +366,6 @@ export class DealsService {
 
   private async claimInvitationRecord(invitationId: string) {
     const now = new Date();
-
     return this.prisma.$transaction(async (tx) => {
       const invitation = await tx.dealInvitation.findUnique({
         where: { id: invitationId },
@@ -400,27 +374,28 @@ export class DealsService {
       if (!invitation) throw new NotFoundException('Invitation not found');
       this.assertInvitationUsable(invitation, now);
 
-      const claimed = await tx.dealInvitation.updateMany({
-        where: {
-          id: invitation.id,
-          claimedAt: null,
-          revokedAt: null,
-          expiresAt: { gt: now }
-        },
+      const role = invitation.invitedRole;
+      const nextStatus = this.toPrismaStatus(DealStatus.WAITING_PAYMENT);
+      assertCanTransition(this.toLocalStatus(invitation.deal.status), DealStatus.WAITING_PAYMENT);
+
+      await tx.dealInvitation.update({
+        where: { id: invitation.id },
         data: { claimedAt: now }
       });
-      if (claimed.count !== 1) throw new BadRequestException('Invitation is no longer available');
 
-      await tx.dealEvent.create({
+      await tx.deal.update({
+        where: { id: invitation.dealId },
         data: {
-          dealId: invitation.dealId,
-          actorRole: DealRole.SYSTEM,
-          eventType: 'deal.invitation_claimed',
-          fromStatus: invitation.deal.status,
-          toStatus: invitation.deal.status,
-          payload: {
-            invitedRole: invitation.invitedRole,
-            shortCode: invitation.shortCode
+          status: nextStatus,
+          acceptedBySellerAt: role === PartyRole.SELLER ? now : undefined,
+          acceptedByBuyerAt: role === PartyRole.BUYER ? now : undefined,
+          events: {
+            create: this.eventData(
+              'deal.counterparty_joined',
+              invitation.deal.status,
+              nextStatus,
+              { role, invitationId: invitation.id }
+            )
           }
         }
       });
