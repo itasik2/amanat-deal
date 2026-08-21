@@ -215,7 +215,7 @@ export default function DealPage() {
   const payment = deal.payments.at(-1);
   const canReportProblem = activeRole !== 'ADMIN' && ['WAITING_SHIPMENT', 'SHIPPED', 'DELIVERED', 'INSPECTION'].includes(deal.status);
 
-  function roleAction() {
+  function roleAction(currentDeal: Deal) {
     if (activeRole === 'ADMIN') {
       return (
         <div className="role-waiting admin-context">
@@ -225,16 +225,16 @@ export default function DealPage() {
       );
     }
 
-    if (deal.status === 'COMPLETED') {
+    if (currentDeal.status === 'COMPLETED') {
       return <div className="notice success">Сделка завершена. Выплата продавцу зафиксирована в истории.</div>;
     }
 
-    if (deal.status === 'PROBLEM_REPORTED' || deal.status === 'WAITING_LEGAL_RESOLUTION') {
+    if (currentDeal.status === 'PROBLEM_REPORTED' || currentDeal.status === 'WAITING_LEGAL_RESOLUTION') {
       return <div className="notice warning">Обычный ход сделки остановлен. Ниже доступен общий канал урегулирования.</div>;
     }
 
     if (activeRole === 'BUYER') {
-      if (deal.status === 'WAITING_BUYER') {
+      if (currentDeal.status === 'WAITING_BUYER') {
         return (
           <>
             <p className="muted">Проверьте условия сделки. После принятия станет доступен этап оплаты.</p>
@@ -242,7 +242,7 @@ export default function DealPage() {
           </>
         );
       }
-      if (deal.status === 'WAITING_PAYMENT') {
+      if (currentDeal.status === 'WAITING_PAYMENT') {
         return (
           <>
             <p className="muted">В пилоте реальный банк ещё не подключён. Кнопка имитирует резервирование средств покупателя.</p>
@@ -250,10 +250,10 @@ export default function DealPage() {
           </>
         );
       }
-      if (deal.status === 'WAITING_SHIPMENT') {
+      if (currentDeal.status === 'WAITING_SHIPMENT') {
         return <div className="role-waiting"><strong>Ваше действие пока не требуется.</strong><span>Продавец должен добавить обязательные материалы и зафиксировать отправку.</span></div>;
       }
-      if (deal.status === 'SHIPPED') {
+      if (currentDeal.status === 'SHIPPED') {
         return (
           <>
             <p className="muted">В пилоте покупатель вручную подтверждает факт доставки. Позже это событие должен давать перевозчик.</p>
@@ -261,10 +261,10 @@ export default function DealPage() {
           </>
         );
       }
-      if (deal.status === 'INSPECTION') {
+      if (currentDeal.status === 'INSPECTION') {
         return (
           <>
-            <p className="muted">Проверьте предмет сделки до {dateTime(deal.inspectionEndsAt)} и закройте свой чек-лист доказательств.</p>
+            <p className="muted">Проверьте предмет сделки до {dateTime(currentDeal.inspectionEndsAt)} и закройте свой чек-лист доказательств.</p>
             <button className="button" disabled={acting} onClick={() => void post('confirm-receipt')}>Подтвердить получение</button>
           </>
         );
@@ -272,13 +272,13 @@ export default function DealPage() {
     }
 
     if (activeRole === 'SELLER') {
-      if (deal.status === 'WAITING_BUYER') {
+      if (currentDeal.status === 'WAITING_BUYER') {
         return <div className="role-waiting"><strong>Ждём покупателя.</strong><span>Покупатель должен принять условия сделки.</span></div>;
       }
-      if (deal.status === 'WAITING_PAYMENT') {
+      if (currentDeal.status === 'WAITING_PAYMENT') {
         return <div className="role-waiting"><strong>Ждём оплату.</strong><span>После резервирования средств продавцу откроется этап отправки.</span></div>;
       }
-      if (deal.status === 'WAITING_SHIPMENT') {
+      if (currentDeal.status === 'WAITING_SHIPMENT') {
         return (
           <form className="form" onSubmit={submitShipment}>
             <p className="muted">Перед отправкой закройте обязательные пункты своего чек-листа ниже.</p>
@@ -294,15 +294,15 @@ export default function DealPage() {
           </form>
         );
       }
-      if (deal.status === 'SHIPPED') {
+      if (currentDeal.status === 'SHIPPED') {
         return <div className="role-waiting"><strong>Отправка зафиксирована.</strong><span>Теперь ждём подтверждения доставки покупателем или перевозчиком.</span></div>;
       }
-      if (deal.status === 'INSPECTION') {
+      if (currentDeal.status === 'INSPECTION') {
         return <div className="role-waiting"><strong>Покупатель проверяет результат.</strong><span>До завершения проверки средства остаются защищены условиями сделки.</span></div>;
       }
     }
 
-    return <div className="role-waiting"><strong>Ожидаем следующий этап.</strong><span>Текущий статус: {statusLabels[deal.status] ?? deal.status}.</span></div>;
+    return <div className="role-waiting"><strong>Ожидаем следующий этап.</strong><span>Текущий статус: {statusLabels[currentDeal.status] ?? currentDeal.status}.</span></div>;
   }
 
   return (
@@ -361,7 +361,7 @@ export default function DealPage() {
         <section className={`card role-action-card ${activeRole === 'ADMIN' ? 'admin-action-card' : ''}`}>
           <p className="eyebrow">{roleLabel(activeRole)} · текущий контекст</p>
           <h2>{statusLabels[deal.status] ?? deal.status}</h2>
-          {roleAction()}
+          {roleAction(deal)}
 
           {canReportProblem ? (
             <details className="problem-box">
