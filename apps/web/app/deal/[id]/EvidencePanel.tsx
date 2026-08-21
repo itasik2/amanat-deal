@@ -67,6 +67,33 @@ function evidenceKindLabel(kind: string) {
   return labels[kind] ?? kind;
 }
 
+async function readApiJson<T>(response: Response, label: string): Promise<T> {
+  const text = await response.text();
+
+  if (!response.ok) {
+    let message = '';
+    if (text.trim()) {
+      try {
+        const body = JSON.parse(text) as { message?: string | string[] };
+        message = Array.isArray(body.message) ? body.message.join(', ') : body.message ?? '';
+      } catch {
+        message = text.slice(0, 300);
+      }
+    }
+    throw new Error(message || `${label}: ошибка API ${response.status}`);
+  }
+
+  if (!text.trim()) {
+    throw new Error(`${label}: API вернул пустой ответ (${response.status})`);
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`${label}: API вернул некорректный JSON`);
+  }
+}
+
 export function EvidencePanel({
   dealId,
   protectionPlan,
@@ -87,12 +114,22 @@ export function EvidencePanel({
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    const [evidenceResponse, checklistResponse] = await Promise.all([
-      fetch(`/api/backend/deals/${dealId}/evidence`, { cache: 'no-store' }),
-      fetch(`/api/backend/deals/${dealId}/protection-checklist`, { cache: 'no-store' })
-    ]);
-    if (evidenceResponse.ok) setItems((await evidenceResponse.json()) as Evidence[]);
-    if (checklistResponse.ok) setChecklist((await checklistResponse.json()) as ProtectionChecklist);
+    try {
+      const [evidenceResponse, checklistResponse] = await Promise.all([
+        fetch(`/api/backend/deals/${dealId}/evidence`, { cache: 'no-store' }),
+        fetch(`/api/backend/deals/${dealId}/protection-checklist`, { cache: 'no-store' })
+      ]);
+
+      const [evidenceData, checklistData] = await Promise.all([
+        readApiJson<Evidence[]>(evidenceResponse, 'Доказательства'),
+        readApiJson<ProtectionChecklist>(checklistResponse, 'Чек-лист защиты')
+      ]);
+
+      setItems(evidenceData);
+      setChecklist(checklistData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось загрузить доказательства сделки');
+    }
   }, [dealId]);
 
   useEffect(() => {
@@ -185,6 +222,8 @@ export function EvidencePanel({
         </span>
       </div>
 
+      {error ? <div className="notice error spacing-top-small">{error}</div> : null}
+
       {checklist ? (
         <div className="spacing-top-small">
           <div className={visibleChecklistComplete ? 'notice success' : checklist.required ? 'notice warning' : 'notice'}>
@@ -247,7 +286,6 @@ export function EvidencePanel({
             <span>Примечание</span>
             <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Что подтверждает этот файл" />
           </label>
-          {error ? <div className="notice error">{error}</div> : null}
           <button className="button" disabled={busy} type="submit">{busy ? 'Загрузка…' : 'Добавить доказательство'}</button>
         </form>
       ) : (
