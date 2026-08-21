@@ -2,7 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
-type DealRole = 'BUYER' | 'SELLER';
+type DealRole = 'BUYER' | 'SELLER' | 'ADMIN';
+type PartyRole = 'BUYER' | 'SELLER';
 
 type Evidence = {
   id: string;
@@ -18,7 +19,7 @@ type Evidence = {
 type ChecklistItem = {
   key: string;
   label: string;
-  role: DealRole;
+  role: PartyRole;
   kind: string;
   stage: 'PRE_SHIPMENT' | 'RECEIPT';
   required: boolean;
@@ -46,8 +47,11 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function roleLabel(role: DealRole) {
-  return role === 'SELLER' ? 'Продавец' : 'Покупатель';
+function roleLabel(role: string) {
+  if (role === 'SELLER') return 'Продавец';
+  if (role === 'BUYER') return 'Покупатель';
+  if (role === 'ADMIN') return 'Админ';
+  return role;
 }
 
 function evidenceKindLabel(kind: string) {
@@ -104,17 +108,20 @@ export function EvidencePanel({
     if (input) input.value = '';
   }, [activeRole, dealId]);
 
-  const roleChecklist = useMemo(
-    () => checklist?.items.filter((item) => item.role === activeRole) ?? [],
+  const visibleChecklist = useMemo(
+    () => activeRole === 'ADMIN' ? checklist?.items ?? [] : checklist?.items.filter((item) => item.role === activeRole) ?? [],
     [checklist, activeRole]
   );
-  const roleEvidence = useMemo(
-    () => items.filter((item) => item.uploaderRole === activeRole),
+  const visibleEvidence = useMemo(
+    () => activeRole === 'ADMIN' ? items : items.filter((item) => item.uploaderRole === activeRole),
     [items, activeRole]
   );
-  const roleChecklistComplete = roleChecklist.every((item) => item.satisfied);
+  const visibleChecklistComplete = activeRole === 'ADMIN'
+    ? Boolean(checklist?.complete)
+    : visibleChecklist.every((item) => item.satisfied);
 
   function prepareChecklistEvidence(item: ChecklistItem) {
+    if (activeRole === 'ADMIN') return;
     setKind(item.kind);
     setNote(item.label);
     setError('');
@@ -128,6 +135,7 @@ export function EvidencePanel({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (activeRole === 'ADMIN') return;
     if (!file) {
       setError('Выберите файл');
       return;
@@ -163,12 +171,14 @@ export function EvidencePanel({
     }
   }
 
+  const isAdmin = activeRole === 'ADMIN';
+
   return (
     <section className="card spacing-top">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Доказательства · {roleLabel(activeRole)}</p>
-          <h2>Ваш чек-лист и материалы</h2>
+          <p className="eyebrow">Доказательная база · {roleLabel(activeRole)}</p>
+          <h2>{isAdmin ? 'Контроль доказательств обеих сторон' : 'Ваш чек-лист и материалы'}</h2>
         </div>
         <span className="muted small">
           {protectionPlan === 'EXTENDED' ? 'Расширенная защита' : 'Базовая защита'} · SHA-256 на сервере
@@ -177,87 +187,94 @@ export function EvidencePanel({
 
       {checklist ? (
         <div className="spacing-top-small">
-          <div className={roleChecklistComplete ? 'notice success' : checklist.required ? 'notice warning' : 'notice'}>
-            {checklist.required
-              ? roleChecklistComplete
-                ? `Чек-лист стороны «${roleLabel(activeRole)}» выполнен.`
-                : `Расширенная защита: стороне «${roleLabel(activeRole)}» нужно закрыть обязательные пункты своего этапа.`
-              : `Базовая защита: материалы для стороны «${roleLabel(activeRole)}» рекомендуются, но не блокируют сделку.`}
+          <div className={visibleChecklistComplete ? 'notice success' : checklist.required ? 'notice warning' : 'notice'}>
+            {isAdmin
+              ? checklist.complete
+                ? 'Общий чек-лист сделки выполнен.'
+                : 'В сделке остаются незакрытые пункты доказательной фиксации.'
+              : checklist.required
+                ? visibleChecklistComplete
+                  ? `Чек-лист стороны «${roleLabel(activeRole)}» выполнен.`
+                  : `Расширенная защита: стороне «${roleLabel(activeRole)}» нужно закрыть обязательные пункты своего этапа.`
+                : `Базовая защита: материалы для стороны «${roleLabel(activeRole)}» рекомендуются, но не блокируют сделку.`}
           </div>
           <div className="evidence-list spacing-top-small">
-            {roleChecklist.map((item) => (
+            {visibleChecklist.map((item) => (
               <div className="evidence-item" key={item.key}>
                 <div className="evidence-main">
                   <strong>{item.satisfied ? '✓' : '○'} {item.label}</strong>
                   <span className="muted small">
-                    {evidenceKindLabel(item.kind)} · {item.stage === 'PRE_SHIPMENT' ? 'до отправки' : 'при получении'}
+                    {isAdmin ? `${roleLabel(item.role)} · ` : ''}{evidenceKindLabel(item.kind)} · {item.stage === 'PRE_SHIPMENT' ? 'до отправки' : 'при получении'}
                     {item.required ? ' · обязательно' : ' · рекомендуется'}
                   </span>
                 </div>
-                {!item.satisfied ? (
-                  <button
-                    className="button secondary compact-button"
-                    type="button"
-                    disabled={busy}
-                    onClick={() => prepareChecklistEvidence(item)}
-                  >
+                {!isAdmin && !item.satisfied ? (
+                  <button className="button secondary compact-button" type="button" disabled={busy} onClick={() => prepareChecklistEvidence(item)}>
                     Добавить для этого пункта
                   </button>
                 ) : null}
               </div>
             ))}
-            {roleChecklist.length === 0 ? <p className="muted">Для этой стороны отдельных пунктов чек-листа нет.</p> : null}
+            {visibleChecklist.length === 0 ? <p className="muted">Пунктов чек-листа нет.</p> : null}
           </div>
         </div>
       ) : null}
 
-      <form className="form evidence-form spacing-top" onSubmit={submit}>
-        <div className="role-context">
-          Вы загружаете материал как <strong>{roleLabel(activeRole)}</strong>. В рабочей версии роль будет определяться аккаунтом автоматически.
-        </div>
-        <div className="form-grid-2">
+      {!isAdmin ? (
+        <form className="form evidence-form spacing-top" onSubmit={submit}>
+          <div className="role-context">
+            Вы загружаете материал как <strong>{roleLabel(activeRole)}</strong>. В рабочей версии роль будет определяться аккаунтом автоматически.
+          </div>
+          <div className="form-grid-2">
+            <label className="field">
+              <span>Файл</span>
+              <input id={`evidence-file-${dealId}`} type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+            </label>
+            <label className="field">
+              <span>Что подтверждает файл</span>
+              <select value={kind} onChange={(event) => setKind(event.target.value)}>
+                <option value="PHOTO">Состояние / общий вид (фото)</option>
+                <option value="VIDEO">Видео / распаковка</option>
+                <option value="DOCUMENT">Документ</option>
+                <option value="SERIAL_NUMBER">Серийный номер / шильдик</option>
+                <option value="PACKAGING">Упаковка (фото или видео)</option>
+                <option value="DELIVERY">Доставка</option>
+                <option value="OTHER">Другое</option>
+              </select>
+            </label>
+          </div>
           <label className="field">
-            <span>Файл</span>
-            <input id={`evidence-file-${dealId}`} type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+            <span>Примечание</span>
+            <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Что подтверждает этот файл" />
           </label>
-          <label className="field">
-            <span>Что подтверждает файл</span>
-            <select value={kind} onChange={(event) => setKind(event.target.value)}>
-              <option value="PHOTO">Состояние / общий вид (фото)</option>
-              <option value="VIDEO">Видео / распаковка</option>
-              <option value="DOCUMENT">Документ</option>
-              <option value="SERIAL_NUMBER">Серийный номер / шильдик</option>
-              <option value="PACKAGING">Упаковка (фото или видео)</option>
-              <option value="DELIVERY">Доставка</option>
-              <option value="OTHER">Другое</option>
-            </select>
-          </label>
+          {error ? <div className="notice error">{error}</div> : null}
+          <button className="button" disabled={busy} type="submit">{busy ? 'Загрузка…' : 'Добавить доказательство'}</button>
+        </form>
+      ) : (
+        <div className="role-context spacing-top">
+          Админ просматривает материалы обеих сторон. Добавление доказательств от имени участников из административного режима отключено.
         </div>
-        <label className="field">
-          <span>Примечание</span>
-          <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Что подтверждает этот файл" />
-        </label>
-        {error ? <div className="notice error">{error}</div> : null}
-        <button className="button" disabled={busy} type="submit">{busy ? 'Загрузка…' : 'Добавить доказательство'}</button>
-      </form>
+      )}
 
       <div className="evidence-list spacing-top">
         <div className="section-heading">
-          <h3>Материалы стороны «{roleLabel(activeRole)}»</h3>
-          <span className="muted small">{roleEvidence.length} шт.</span>
+          <h3>{isAdmin ? 'Все материалы сделки' : `Материалы стороны «${roleLabel(activeRole)}»`}</h3>
+          <span className="muted small">{visibleEvidence.length} шт.</span>
         </div>
-        {roleEvidence.map((item) => (
+        {visibleEvidence.map((item) => (
           <div className="evidence-item" key={item.id}>
             <div className="evidence-main">
               <strong>{item.fileName}</strong>
-              <span className="muted small">{evidenceKindLabel(item.kind)} · {formatSize(item.sizeBytes)} · {formatDate(item.createdAt)}</span>
+              <span className="muted small">
+                {isAdmin ? `${roleLabel(item.uploaderRole)} · ` : ''}{evidenceKindLabel(item.kind)} · {formatSize(item.sizeBytes)} · {formatDate(item.createdAt)}
+              </span>
               {item.note ? <span>{item.note}</span> : null}
               <code className="hash">SHA-256: {item.sha256}</code>
             </div>
             <a className="button secondary compact-button" href={`/api/backend/deals/${dealId}/evidence/${item.id}/file`} target="_blank" rel="noreferrer">Открыть</a>
           </div>
         ))}
-        {roleEvidence.length === 0 ? <p className="muted">Эта сторона пока не добавляла материалов.</p> : null}
+        {visibleEvidence.length === 0 ? <p className="muted">Материалов пока нет.</p> : null}
       </div>
     </section>
   );
