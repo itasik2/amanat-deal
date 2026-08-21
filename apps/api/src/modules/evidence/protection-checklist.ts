@@ -10,7 +10,7 @@ export type EvidenceSnapshot = {
 type ChecklistDefinition = {
   key: string;
   label: string;
-  role: DealRole.BUYER | DealRole.SELLER;
+  role: DealRole;
   kind: string;
   stage: ProtectionStage;
   extendedOnly?: boolean;
