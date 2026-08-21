@@ -13,7 +13,15 @@ export enum ProtectionPlanDto {
   EXTENDED = 'EXTENDED'
 }
 
+export enum PartyRoleDto {
+  SELLER = 'SELLER',
+  BUYER = 'BUYER'
+}
+
 export class CreateDealDto {
+  @IsEnum(PartyRoleDto)
+  creatorRole!: PartyRoleDto;
+
   @IsString()
   @MinLength(3)
   title!: string;
