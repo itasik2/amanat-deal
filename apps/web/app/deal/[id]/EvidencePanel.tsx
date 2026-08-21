@@ -13,6 +13,24 @@ type Evidence = {
   createdAt: string;
 };
 
+type ChecklistItem = {
+  key: string;
+  label: string;
+  role: 'BUYER' | 'SELLER';
+  kind: string;
+  stage: 'PRE_SHIPMENT' | 'RECEIPT';
+  required: boolean;
+  satisfied: boolean;
+};
+
+type ProtectionChecklist = {
+  protectionPlan: 'BASIC' | 'EXTENDED';
+  category: string;
+  required: boolean;
+  complete: boolean;
+  items: ChecklistItem[];
+};
+
 function formatSize(value: number) {
   if (value < 1024) return `${value} Б`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} КБ`;
@@ -26,6 +44,10 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function roleLabel(role: string) {
+  return role === 'SELLER' ? 'Продавец' : role === 'BUYER' ? 'Покупатель' : role;
+}
+
 export function EvidencePanel({
   dealId,
   protectionPlan,
@@ -36,6 +58,7 @@ export function EvidencePanel({
   onChanged: () => void;
 }) {
   const [items, setItems] = useState<Evidence[]>([]);
+  const [checklist, setChecklist] = useState<ProtectionChecklist | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [kind, setKind] = useState('PHOTO');
   const [uploaderRole, setUploaderRole] = useState('SELLER');
@@ -44,8 +67,12 @@ export function EvidencePanel({
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    const response = await fetch(`/api/backend/deals/${dealId}/evidence`, { cache: 'no-store' });
-    if (response.ok) setItems((await response.json()) as Evidence[]);
+    const [evidenceResponse, checklistResponse] = await Promise.all([
+      fetch(`/api/backend/deals/${dealId}/evidence`, { cache: 'no-store' }),
+      fetch(`/api/backend/deals/${dealId}/protection-checklist`, { cache: 'no-store' })
+    ]);
+    if (evidenceResponse.ok) setItems((await evidenceResponse.json()) as Evidence[]);
+    if (checklistResponse.ok) setChecklist((await checklistResponse.json()) as ProtectionChecklist);
   }, [dealId]);
 
   useEffect(() => {
@@ -102,11 +129,36 @@ export function EvidencePanel({
       </div>
 
       <p className="muted">
-        Фото, документы и другие материалы фиксируются в любом тарифе. Расширенная защита отличается не наличием доказательств,
-        а более строгим сценарием их сбора и проверки.
+        Фото, документы и другие материалы фиксируются в любом тарифе. Для базовой защиты чек-лист рекомендательный,
+        для расширенной обязательные пункты контролируются перед отправкой и подтверждением получения.
       </p>
 
-      <form className="form evidence-form" onSubmit={submit}>
+      {checklist ? (
+        <div className="spacing-top-small">
+          <div className={checklist.complete ? 'notice success' : checklist.required ? 'notice warning' : 'notice'}>
+            {checklist.required
+              ? checklist.complete
+                ? 'Обязательный чек-лист расширенной защиты выполнен.'
+                : 'Расширенная защита: незакрытые пункты будут блокировать соответствующий этап сделки.'
+              : 'Базовая защита: эти материалы рекомендуются, но не блокируют сделку.'}
+          </div>
+          <div className="evidence-list spacing-top-small">
+            {checklist.items.map((item) => (
+              <div className="evidence-item" key={item.key}>
+                <div className="evidence-main">
+                  <strong>{item.satisfied ? '✓' : '○'} {item.label}</strong>
+                  <span className="muted small">
+                    {roleLabel(item.role)} · {item.kind} · {item.stage === 'PRE_SHIPMENT' ? 'до отправки' : 'при получении'}
+                    {item.required ? ' · обязательно' : ' · рекомендуется'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <form className="form evidence-form spacing-top" onSubmit={submit}>
         <div className="form-grid-3">
           <label className="field">
             <span>Файл</span>
