@@ -48,6 +48,19 @@ function roleLabel(role: string) {
   return role === 'SELLER' ? 'Продавец' : role === 'BUYER' ? 'Покупатель' : role;
 }
 
+function evidenceKindLabel(kind: string) {
+  const labels: Record<string, string> = {
+    PHOTO: 'Состояние / общий вид',
+    VIDEO: 'Видео / распаковка',
+    DOCUMENT: 'Документ',
+    SERIAL_NUMBER: 'Серийный номер / шильдик',
+    PACKAGING: 'Упаковка',
+    DELIVERY: 'Доставка',
+    OTHER: 'Другое'
+  };
+  return labels[kind] ?? kind;
+}
+
 export function EvidencePanel({
   dealId,
   protectionPlan,
@@ -78,6 +91,19 @@ export function EvidencePanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  function prepareChecklistEvidence(item: ChecklistItem) {
+    setKind(item.kind);
+    setUploaderRole(item.role);
+    setNote(item.label);
+    setError('');
+
+    const input = document.getElementById(`evidence-file-${dealId}`) as HTMLInputElement | null;
+    if (input) {
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      input.click();
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -148,10 +174,20 @@ export function EvidencePanel({
                 <div className="evidence-main">
                   <strong>{item.satisfied ? '✓' : '○'} {item.label}</strong>
                   <span className="muted small">
-                    {roleLabel(item.role)} · {item.kind} · {item.stage === 'PRE_SHIPMENT' ? 'до отправки' : 'при получении'}
+                    {roleLabel(item.role)} · {evidenceKindLabel(item.kind)} · {item.stage === 'PRE_SHIPMENT' ? 'до отправки' : 'при получении'}
                     {item.required ? ' · обязательно' : ' · рекомендуется'}
                   </span>
                 </div>
+                {!item.satisfied ? (
+                  <button
+                    className="button secondary compact-button"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => prepareChecklistEvidence(item)}
+                  >
+                    Добавить для этого пункта
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
@@ -165,13 +201,13 @@ export function EvidencePanel({
             <input id={`evidence-file-${dealId}`} type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
           </label>
           <label className="field">
-            <span>Тип</span>
+            <span>Что подтверждает файл</span>
             <select value={kind} onChange={(event) => setKind(event.target.value)}>
-              <option value="PHOTO">Фото</option>
-              <option value="VIDEO">Видео</option>
+              <option value="PHOTO">Состояние / общий вид (фото)</option>
+              <option value="VIDEO">Видео / распаковка</option>
               <option value="DOCUMENT">Документ</option>
               <option value="SERIAL_NUMBER">Серийный номер / шильдик</option>
-              <option value="PACKAGING">Упаковка</option>
+              <option value="PACKAGING">Упаковка (фото или видео)</option>
               <option value="DELIVERY">Доставка</option>
               <option value="OTHER">Другое</option>
             </select>
@@ -197,7 +233,7 @@ export function EvidencePanel({
           <div className="evidence-item" key={item.id}>
             <div className="evidence-main">
               <strong>{item.fileName}</strong>
-              <span className="muted small">{item.kind} · {item.uploaderRole} · {formatSize(item.sizeBytes)} · {formatDate(item.createdAt)}</span>
+              <span className="muted small">{evidenceKindLabel(item.kind)} · {roleLabel(item.uploaderRole)} · {formatSize(item.sizeBytes)} · {formatDate(item.createdAt)}</span>
               {item.note ? <span>{item.note}</span> : null}
               <code className="hash">SHA-256: {item.sha256}</code>
             </div>
