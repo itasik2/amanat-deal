@@ -18,7 +18,7 @@ export class DealsController {
 
   @Post('join-by-code')
   joinByCode(@Body() body: { code: string }) {
-    return this.deals.invitationPreviewByCode(body.code);
+    return this.deals.invitationByCode(body.code);
   }
 
   @Post('join-by-code/claim')
