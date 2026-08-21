@@ -1,6 +1,8 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+
+type DealRole = 'BUYER' | 'SELLER';
 
 type Evidence = {
   id: string;
@@ -16,7 +18,7 @@ type Evidence = {
 type ChecklistItem = {
   key: string;
   label: string;
-  role: 'BUYER' | 'SELLER';
+  role: DealRole;
   kind: string;
   stage: 'PRE_SHIPMENT' | 'RECEIPT';
   required: boolean;
@@ -44,8 +46,8 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function roleLabel(role: string) {
-  return role === 'SELLER' ? 'Продавец' : role === 'BUYER' ? 'Покупатель' : role;
+function roleLabel(role: DealRole) {
+  return role === 'SELLER' ? 'Продавец' : 'Покупатель';
 }
 
 function evidenceKindLabel(kind: string) {
@@ -64,17 +66,18 @@ function evidenceKindLabel(kind: string) {
 export function EvidencePanel({
   dealId,
   protectionPlan,
+  activeRole,
   onChanged
 }: {
   dealId: string;
   protectionPlan: 'BASIC' | 'EXTENDED';
+  activeRole: DealRole;
   onChanged: () => void;
 }) {
   const [items, setItems] = useState<Evidence[]>([]);
   const [checklist, setChecklist] = useState<ProtectionChecklist | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [kind, setKind] = useState('PHOTO');
-  const [uploaderRole, setUploaderRole] = useState('SELLER');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -92,9 +95,27 @@ export function EvidencePanel({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    setFile(null);
+    setKind('PHOTO');
+    setNote('');
+    setError('');
+    const input = document.getElementById(`evidence-file-${dealId}`) as HTMLInputElement | null;
+    if (input) input.value = '';
+  }, [activeRole, dealId]);
+
+  const roleChecklist = useMemo(
+    () => checklist?.items.filter((item) => item.role === activeRole) ?? [],
+    [checklist, activeRole]
+  );
+  const roleEvidence = useMemo(
+    () => items.filter((item) => item.uploaderRole === activeRole),
+    [items, activeRole]
+  );
+  const roleChecklistComplete = roleChecklist.every((item) => item.satisfied);
+
   function prepareChecklistEvidence(item: ChecklistItem) {
     setKind(item.kind);
-    setUploaderRole(item.role);
     setNote(item.label);
     setError('');
 
@@ -117,7 +138,7 @@ export function EvidencePanel({
     const data = new FormData();
     data.set('file', file);
     data.set('kind', kind);
-    data.set('uploaderRole', uploaderRole);
+    data.set('uploaderRole', activeRole);
     if (note.trim()) data.set('note', note.trim());
 
     try {
@@ -146,35 +167,30 @@ export function EvidencePanel({
     <section className="card spacing-top">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Доказательная база</p>
-          <h2>Доказательства сделки</h2>
+          <p className="eyebrow">Доказательства · {roleLabel(activeRole)}</p>
+          <h2>Ваш чек-лист и материалы</h2>
         </div>
         <span className="muted small">
           {protectionPlan === 'EXTENDED' ? 'Расширенная защита' : 'Базовая защита'} · SHA-256 на сервере
         </span>
       </div>
 
-      <p className="muted">
-        Фото, документы и другие материалы фиксируются в любом тарифе. Для базовой защиты чек-лист рекомендательный,
-        для расширенной обязательные пункты контролируются перед отправкой и подтверждением получения.
-      </p>
-
       {checklist ? (
         <div className="spacing-top-small">
-          <div className={checklist.complete ? 'notice success' : checklist.required ? 'notice warning' : 'notice'}>
+          <div className={roleChecklistComplete ? 'notice success' : checklist.required ? 'notice warning' : 'notice'}>
             {checklist.required
-              ? checklist.complete
-                ? 'Обязательный чек-лист расширенной защиты выполнен.'
-                : 'Расширенная защита: незакрытые пункты будут блокировать соответствующий этап сделки.'
-              : 'Базовая защита: эти материалы рекомендуются, но не блокируют сделку.'}
+              ? roleChecklistComplete
+                ? `Чек-лист стороны «${roleLabel(activeRole)}» выполнен.`
+                : `Расширенная защита: стороне «${roleLabel(activeRole)}» нужно закрыть обязательные пункты своего этапа.`
+              : `Базовая защита: материалы для стороны «${roleLabel(activeRole)}» рекомендуются, но не блокируют сделку.`}
           </div>
           <div className="evidence-list spacing-top-small">
-            {checklist.items.map((item) => (
+            {roleChecklist.map((item) => (
               <div className="evidence-item" key={item.key}>
                 <div className="evidence-main">
                   <strong>{item.satisfied ? '✓' : '○'} {item.label}</strong>
                   <span className="muted small">
-                    {roleLabel(item.role)} · {evidenceKindLabel(item.kind)} · {item.stage === 'PRE_SHIPMENT' ? 'до отправки' : 'при получении'}
+                    {evidenceKindLabel(item.kind)} · {item.stage === 'PRE_SHIPMENT' ? 'до отправки' : 'при получении'}
                     {item.required ? ' · обязательно' : ' · рекомендуется'}
                   </span>
                 </div>
@@ -190,12 +206,16 @@ export function EvidencePanel({
                 ) : null}
               </div>
             ))}
+            {roleChecklist.length === 0 ? <p className="muted">Для этой стороны отдельных пунктов чек-листа нет.</p> : null}
           </div>
         </div>
       ) : null}
 
       <form className="form evidence-form spacing-top" onSubmit={submit}>
-        <div className="form-grid-3">
+        <div className="role-context">
+          Вы загружаете материал как <strong>{roleLabel(activeRole)}</strong>. В рабочей версии роль будет определяться аккаунтом автоматически.
+        </div>
+        <div className="form-grid-2">
           <label className="field">
             <span>Файл</span>
             <input id={`evidence-file-${dealId}`} type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
@@ -212,13 +232,6 @@ export function EvidencePanel({
               <option value="OTHER">Другое</option>
             </select>
           </label>
-          <label className="field">
-            <span>Сторона</span>
-            <select value={uploaderRole} onChange={(event) => setUploaderRole(event.target.value)}>
-              <option value="SELLER">Продавец</option>
-              <option value="BUYER">Покупатель</option>
-            </select>
-          </label>
         </div>
         <label className="field">
           <span>Примечание</span>
@@ -229,18 +242,22 @@ export function EvidencePanel({
       </form>
 
       <div className="evidence-list spacing-top">
-        {items.map((item) => (
+        <div className="section-heading">
+          <h3>Материалы стороны «{roleLabel(activeRole)}»</h3>
+          <span className="muted small">{roleEvidence.length} шт.</span>
+        </div>
+        {roleEvidence.map((item) => (
           <div className="evidence-item" key={item.id}>
             <div className="evidence-main">
               <strong>{item.fileName}</strong>
-              <span className="muted small">{evidenceKindLabel(item.kind)} · {roleLabel(item.uploaderRole)} · {formatSize(item.sizeBytes)} · {formatDate(item.createdAt)}</span>
+              <span className="muted small">{evidenceKindLabel(item.kind)} · {formatSize(item.sizeBytes)} · {formatDate(item.createdAt)}</span>
               {item.note ? <span>{item.note}</span> : null}
               <code className="hash">SHA-256: {item.sha256}</code>
             </div>
             <a className="button secondary compact-button" href={`/api/backend/deals/${dealId}/evidence/${item.id}/file`} target="_blank" rel="noreferrer">Открыть</a>
           </div>
         ))}
-        {items.length === 0 ? <p className="muted">Доказательств пока нет.</p> : null}
+        {roleEvidence.length === 0 ? <p className="muted">Эта сторона пока не добавляла материалов.</p> : null}
       </div>
     </section>
   );
