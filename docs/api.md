@@ -19,10 +19,23 @@ Base path: `/api/v1`.
 
 Every deal includes terms, event history, dispute channel and evidence collection.
 
-- `BASIC` — standard protected deal flow and standard fee (`PLATFORM_FEE_PERCENT`, default 2%).
-- `EXTENDED` — enhanced protection flow with a stricter evidence/checklist policy and a separate fee (`EXTENDED_PROTECTION_FEE_PERCENT`, default 3%).
+- `BASIC` — standard protected deal flow and standard fee (`PLATFORM_FEE_PERCENT`, default 2%). Evidence checklist items are recommendations and do not block the flow.
+- `EXTENDED` — enhanced protection flow with a stricter evidence checklist and a separate fee (`EXTENDED_PROTECTION_FEE_PERCENT`, default 3%). Required evidence blocks the protected transition until the relevant checklist stage is complete.
 
-Evidence is not a paid extension by itself. The difference between plans is the level of required verification, guidance, storage/checklist policy and future enhanced controls.
+Evidence is not a paid extension by itself. The difference between plans is the level of required verification and guidance.
+
+### Protection evidence checklist
+
+- `GET /deals/:id/protection-checklist` — computed checklist for the deal category and protection plan.
+
+The checklist is computed from `category + protectionPlan + EvidenceFile[]`; it does not require a separate database table. Current categories have different rules for goods, equipment, repairs, services and other deals.
+
+For `EXTENDED` deals:
+
+- `PRE_SHIPMENT` items must be satisfied before `POST /deals/:id/shipment`.
+- `RECEIPT` items must be satisfied before `POST /deals/:id/confirm-receipt`.
+
+For `BASIC` deals the same mechanism shows a recommended minimum but does not block transitions.
 
 ## Evidence
 
@@ -68,15 +81,15 @@ The request does not charge money automatically. `quotedFeeKzt` is nullable so p
 
 The API uses `PrismaService` from `apps/api/src/modules/prisma` and the shared Prisma schema from `packages/database/prisma/schema.prisma`.
 
-Before running the API locally:
+For the current Neon-backed dev/staging setup, configure `DATABASE_URL` (pooled) and `DIRECT_URL` (direct) in `.env`, then run:
 
 ```bash
-cp .env.example .env
-docker compose up -d
 npm install
 npm run prisma:generate
 npm run prisma:migrate
 npm run dev
 ```
+
+A local Docker PostgreSQL remains possible by using the local URLs from `.env.example` and starting `docker compose up -d`.
 
 The current MVP still uses mock escrow, but deals, deliveries, payments, evidence, dispute messages, dispute assistance requests and events persist in PostgreSQL instead of in-memory maps.
