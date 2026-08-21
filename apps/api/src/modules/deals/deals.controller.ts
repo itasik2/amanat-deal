@@ -16,14 +16,29 @@ export class DealsController {
     return this.deals.list();
   }
 
+  @Post('join-by-code')
+  joinByCode(@Body() body: { code: string }) {
+    return this.deals.invitationPreviewByCode(body.code);
+  }
+
+  @Post('join-by-code/claim')
+  claimByCode(@Body() body: { code: string }) {
+    return this.deals.claimInvitationByCode(body.code);
+  }
+
   @Get(':id')
   get(@Param('id') id: string) {
     return this.deals.get(id);
   }
 
   @Post(':id/accept')
-  accept(@Param('id') id: string) {
-    return this.deals.accept(id);
+  accept(@Param('id') id: string, @Body() body: { actorRole?: string }) {
+    return this.deals.accept(id, body?.actorRole);
+  }
+
+  @Post(':id/invitations/reissue')
+  reissueInvitation(@Param('id') id: string) {
+    return this.deals.reissueInvitation(id);
   }
 
   @Post(':id/mock-payment')
