@@ -82,15 +82,17 @@ input:focus, select:focus, textarea:focus { border-color: #64748b; box-shadow: 0
 .meta-grid span { color: #64748b; font-size: .78rem; }
 .meta-grid strong { font-size: .92rem; overflow-wrap: anywhere; }
 
-.role-switch-card { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr); gap: 24px; align-items: center; }
+.role-switch-card { display: grid; grid-template-columns: minmax(220px, .72fr) minmax(0, 1.28fr); gap: 24px; align-items: center; }
 .role-switch-card p:last-child { margin-bottom: 0; }
-.role-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 6px; background: #f1f5f9; border-radius: 18px; }
+.role-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 6px; background: #f1f5f9; border-radius: 18px; }
 .role-tab { display: grid; gap: 4px; text-align: left; border: 1px solid transparent; border-radius: 14px; padding: 15px 16px; background: transparent; color: #475569; }
 .role-tab span { font-size: 1rem; font-weight: 850; }
 .role-tab small { color: #64748b; line-height: 1.35; }
 .role-tab.active { background: #fff; color: #111827; border-color: #cbd5e1; box-shadow: 0 5px 14px rgba(15, 23, 42, .08); }
 .role-tab.active small { color: #475569; }
 .role-action-card { border-top: 4px solid #334155; }
+.admin-action-card { border-top-color: #7c3aed; }
+.admin-context { border-color: #ddd6fe; background: #f5f3ff; }
 .role-context { border: 1px solid #dbeafe; background: #eff6ff; color: #1e3a8a; border-radius: 12px; padding: 11px 13px; line-height: 1.45; }
 .role-waiting { display: grid; gap: 6px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 14px; padding: 15px; }
 .role-waiting span { color: #64748b; line-height: 1.45; }
@@ -117,6 +119,7 @@ input:focus, select:focus, textarea:focus { border-color: #64748b; box-shadow: 0
 .dispute-message { border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px; background: #fff; }
 .dispute-message.role-buyer { border-left: 4px solid #2563eb; }
 .dispute-message.role-seller { border-left: 4px solid #059669; }
+.dispute-message.role-admin { border-left: 4px solid #7c3aed; background: #faf5ff; }
 .dispute-message.role-system { border-left: 4px solid #64748b; background: #f8fafc; }
 .dispute-message-head { display: flex; justify-content: space-between; gap: 12px; }
 .dispute-message p { margin: 10px 0; white-space: pre-wrap; }
@@ -129,6 +132,10 @@ input:focus, select:focus, textarea:focus { border-color: #64748b; box-shadow: 0
 .deal-row-right { display: grid; justify-items: end; gap: 7px; }
 .empty-state { text-align: center; padding: 38px 24px; }
 .empty-state .button { margin-top: 8px; }
+
+@media (max-width: 900px) {
+  .role-switch-card { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 760px) {
   .page { padding: 22px 14px 44px; }
