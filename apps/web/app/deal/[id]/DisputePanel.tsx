@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
-type DealRole = 'BUYER' | 'SELLER';
+type DealRole = 'BUYER' | 'SELLER' | 'ADMIN';
 
 type Evidence = {
   id: string;
@@ -47,7 +47,11 @@ const assistanceLabels: Record<string, string> = {
 };
 
 function roleLabel(role: string) {
-  return role === 'BUYER' ? 'Покупатель' : role === 'SELLER' ? 'Продавец' : role;
+  if (role === 'BUYER') return 'Покупатель';
+  if (role === 'SELLER') return 'Продавец';
+  if (role === 'ADMIN') return 'Админ';
+  if (role === 'SYSTEM') return 'Система';
+  return role;
 }
 
 function money(value: number | null) {
@@ -73,6 +77,7 @@ export function DisputePanel({
   onChanged: () => void;
 }) {
   const enabled = ['PROBLEM_REPORTED', 'WAITING_LEGAL_RESOLUTION'].includes(dealStatus);
+  const isAdmin = activeRole === 'ADMIN';
   const [messages, setMessages] = useState<DisputeMessage[]>([]);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [assistance, setAssistance] = useState<DisputeAssistance | null>(null);
@@ -92,9 +97,9 @@ export function DisputePanel({
     () => messages.some((item) => item.messageType === 'PROPOSAL_ACCEPTED'),
     [messages]
   );
-  const ownEvidence = useMemo(
-    () => evidence.filter((item) => !item.uploaderRole || item.uploaderRole === activeRole),
-    [evidence, activeRole]
+  const visibleEvidence = useMemo(
+    () => isAdmin ? evidence : evidence.filter((item) => !item.uploaderRole || item.uploaderRole === activeRole),
+    [evidence, activeRole, isAdmin]
   );
 
   const load = useCallback(async () => {
@@ -118,6 +123,7 @@ export function DisputePanel({
   useEffect(() => {
     setEvidenceId('');
     setError('');
+    if (activeRole === 'ADMIN') setMode('MESSAGE');
   }, [activeRole]);
 
   useEffect(() => {
@@ -136,7 +142,7 @@ export function DisputePanel({
     setBusy(true);
     setError('');
     try {
-      const proposal = mode === 'PROPOSAL';
+      const proposal = mode === 'PROPOSAL' && !isAdmin;
       const payload: Record<string, unknown> = {
         actorRole: activeRole,
         body: body.trim(),
@@ -173,6 +179,7 @@ export function DisputePanel({
   }
 
   async function respond(proposalId: string, decision: 'ACCEPT' | 'REJECT') {
+    if (isAdmin) return;
     setBusy(true);
     setError('');
     try {
@@ -195,6 +202,7 @@ export function DisputePanel({
   }
 
   async function requestAssistance() {
+    if (isAdmin) return;
     setBusy(true);
     setError('');
     try {
@@ -223,13 +231,15 @@ export function DisputePanel({
       <div className="section-heading">
         <div>
           <p className="eyebrow">Урегулирование · {roleLabel(activeRole)}</p>
-          <h2>Канал спора между сторонами</h2>
+          <h2>Канал спора</h2>
         </div>
-        <span className="muted small">История общая для обеих сторон</span>
+        <span className="muted small">История общая для обеих сторон и оператора</span>
       </div>
 
       <div className="role-context">
-        Сообщения и предложения с этой вкладки отправляются от имени стороны <strong>{roleLabel(activeRole)}</strong>.
+        {isAdmin
+          ? 'Админ может просматривать историю и добавлять служебные сообщения, но не предлагает и не принимает settlement за стороны.'
+          : <>Сообщения и предложения с этой вкладки отправляются от имени стороны <strong>{roleLabel(activeRole)}</strong>.</>}
       </div>
 
       <div className="notice warning spacing-top-small">
@@ -242,6 +252,8 @@ export function DisputePanel({
             <strong>Сопровождение спора: {assistanceLabels[assistance.status] ?? assistance.status}.</strong>{' '}
             {assistance.quotedFeeKzt !== null ? `Стоимость: ${money(assistance.quotedFeeKzt)}.` : 'Стоимость будет определена отдельно до активации услуги.'}
           </>
+        ) : isAdmin ? (
+          <>Стороны пока не запрашивали платное сопровождение Amanat Deal.</>
         ) : (
           <>
             Стороны могут договориться самостоятельно без доплаты. При необходимости можно запросить платное сопровождение Amanat Deal.
@@ -263,7 +275,7 @@ export function DisputePanel({
       <div className="dispute-messages spacing-top">
         {messages.map((item) => {
           const isProposal = item.messageType === 'PROPOSAL';
-          const canRespond = isProposal && !hasAcceptedAgreement && item.actorRole !== activeRole && !respondedProposalIds.has(item.id);
+          const canRespond = !isAdmin && isProposal && !hasAcceptedAgreement && item.actorRole !== activeRole && !respondedProposalIds.has(item.id);
           return (
             <div className={`dispute-message role-${item.actorRole.toLowerCase()}`} key={item.id}>
               <div className="dispute-message-head">
@@ -297,24 +309,34 @@ export function DisputePanel({
       </div>
 
       <form className="form dispute-form spacing-top" onSubmit={submit}>
-        <div className="form-grid-2">
+        {!isAdmin ? (
+          <div className="form-grid-2">
+            <label className="field">
+              <span>Тип обращения</span>
+              <select value={mode} onChange={(event) => setMode(event.target.value as 'MESSAGE' | 'PROPOSAL')}>
+                <option value="MESSAGE">Сообщение другой стороне</option>
+                <option value="PROPOSAL" disabled={hasAcceptedAgreement}>Предложение урегулирования</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Приложить своё доказательство</span>
+              <select value={evidenceId} onChange={(event) => setEvidenceId(event.target.value)}>
+                <option value="">Без файла</option>
+                {visibleEvidence.map((item) => <option key={item.id} value={item.id}>{item.fileName}</option>)}
+              </select>
+            </label>
+          </div>
+        ) : (
           <label className="field">
-            <span>Тип обращения</span>
-            <select value={mode} onChange={(event) => setMode(event.target.value as 'MESSAGE' | 'PROPOSAL')}>
-              <option value="MESSAGE">Сообщение другой стороне</option>
-              <option value="PROPOSAL" disabled={hasAcceptedAgreement}>Предложение урегулирования</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>Приложить своё доказательство</span>
+            <span>Приложить доказательство сделки</span>
             <select value={evidenceId} onChange={(event) => setEvidenceId(event.target.value)}>
               <option value="">Без файла</option>
-              {ownEvidence.map((item) => <option key={item.id} value={item.id}>{item.fileName}</option>)}
+              {visibleEvidence.map((item) => <option key={item.id} value={item.id}>{roleLabel(item.uploaderRole || '')}: {item.fileName}</option>)}
             </select>
           </label>
-        </div>
+        )}
 
-        {mode === 'PROPOSAL' ? (
+        {!isAdmin && mode === 'PROPOSAL' ? (
           <div className="form-grid-2">
             <label className="field">
               <span>Вариант урегулирования</span>
@@ -327,24 +349,19 @@ export function DisputePanel({
             </label>
             <label className="field">
               <span>Сумма, ₸ {needsAmount ? '' : '(определяется суммой сделки)'}</span>
-              <input
-                type="number"
-                min="1"
-                max={dealAmountKzt}
-                disabled={!needsAmount}
-                value={needsAmount ? amountKzt : String(dealAmountKzt)}
-                onChange={(event) => setAmountKzt(event.target.value)}
-              />
+              <input type="number" min="1" max={dealAmountKzt} disabled={!needsAmount} value={needsAmount ? amountKzt : String(dealAmountKzt)} onChange={(event) => setAmountKzt(event.target.value)} />
             </label>
           </div>
         ) : null}
 
         <label className="field">
-          <span>{mode === 'PROPOSAL' ? 'Условия предложения' : `Сообщение от стороны «${roleLabel(activeRole)}»`}</span>
+          <span>{isAdmin ? 'Служебное сообщение оператора' : mode === 'PROPOSAL' ? 'Условия предложения' : `Сообщение от стороны «${roleLabel(activeRole)}»`}</span>
           <textarea rows={4} maxLength={5000} value={body} onChange={(event) => setBody(event.target.value)} />
         </label>
         {error ? <div className="notice error">{error}</div> : null}
-        <button className="button" disabled={busy} type="submit">{busy ? 'Отправка…' : mode === 'PROPOSAL' ? 'Отправить предложение' : 'Отправить сообщение'}</button>
+        <button className="button" disabled={busy} type="submit">
+          {busy ? 'Отправка…' : isAdmin ? 'Добавить служебное сообщение' : mode === 'PROPOSAL' ? 'Отправить предложение' : 'Отправить сообщение'}
+        </button>
       </form>
     </section>
   );
