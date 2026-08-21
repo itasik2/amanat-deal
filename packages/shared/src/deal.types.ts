@@ -1,6 +1,6 @@
 export enum DealStatus {
   DRAFT = 'DRAFT',
-  WAITING_BUYER = 'WAITING_BUYER',
+  WAITING_COUNTERPARTY = 'WAITING_COUNTERPARTY',
   WAITING_PAYMENT = 'WAITING_PAYMENT',
   FUNDS_SECURED = 'FUNDS_SECURED',
   WAITING_SHIPMENT = 'WAITING_SHIPMENT',
@@ -22,6 +22,7 @@ export enum DealCategory {
   OTHER = 'OTHER'
 }
 
+export type PartyRole = 'SELLER' | 'BUYER';
 export type MoneyKzt = number;
 
 export interface DealSummary {
