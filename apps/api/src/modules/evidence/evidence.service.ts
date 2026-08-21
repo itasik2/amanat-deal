@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { DealRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_PROVIDER, StorageProvider } from '../storage/storage.provider';
+import { buildProtectionChecklist } from './protection-checklist';
 
 export type EvidenceUploadInput = {
   kind?: string;
@@ -24,13 +25,33 @@ export class EvidenceService {
     });
   }
 
+  async checklist(dealId: string) {
+    const deal = await this.prisma.deal.findUnique({
+      where: { id: dealId },
+      select: {
+        id: true,
+        category: true,
+        protectionPlan: true,
+        evidence: {
+          select: {
+            uploaderRole: true,
+            kind: true
+          }
+        }
+      }
+    });
+    if (!deal) throw new NotFoundException('Deal not found');
+
+    return buildProtectionChecklist(deal.category, deal.protectionPlan, deal.evidence);
+  }
+
   async upload(dealId: string, file: Express.Multer.File | undefined, input: EvidenceUploadInput) {
     await this.ensureDeal(dealId);
     if (!file) throw new BadRequestException('Evidence file is required');
     if (!file.originalname) throw new BadRequestException('Original file name is required');
 
     const uploaderRole = this.parseRole(input.uploaderRole);
-    const kind = input.kind?.trim() || 'OTHER';
+    const kind = input.kind?.trim().toUpperCase() || 'OTHER';
     const note = input.note?.trim() || undefined;
     const stored = await this.storage.save(dealId, file.originalname, file.buffer);
 
