@@ -2,9 +2,12 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
+type DealRole = 'BUYER' | 'SELLER';
+
 type Evidence = {
   id: string;
   fileName: string;
+  uploaderRole?: string;
 };
 
 type DisputeMessage = {
@@ -43,6 +46,10 @@ const assistanceLabels: Record<string, string> = {
   CANCELLED: 'Запрос отменён'
 };
 
+function roleLabel(role: string) {
+  return role === 'BUYER' ? 'Покупатель' : role === 'SELLER' ? 'Продавец' : role;
+}
+
 function money(value: number | null) {
   if (value === null) return '';
   return new Intl.NumberFormat('ru-RU').format(value) + ' ₸';
@@ -56,18 +63,19 @@ export function DisputePanel({
   dealId,
   dealStatus,
   dealAmountKzt,
+  activeRole,
   onChanged
 }: {
   dealId: string;
   dealStatus: string;
   dealAmountKzt: number;
+  activeRole: DealRole;
   onChanged: () => void;
 }) {
   const enabled = ['PROBLEM_REPORTED', 'WAITING_LEGAL_RESOLUTION'].includes(dealStatus);
   const [messages, setMessages] = useState<DisputeMessage[]>([]);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [assistance, setAssistance] = useState<DisputeAssistance | null>(null);
-  const [actorRole, setActorRole] = useState('BUYER');
   const [mode, setMode] = useState<'MESSAGE' | 'PROPOSAL'>('MESSAGE');
   const [body, setBody] = useState('');
   const [evidenceId, setEvidenceId] = useState('');
@@ -83,6 +91,10 @@ export function DisputePanel({
   const hasAcceptedAgreement = useMemo(
     () => messages.some((item) => item.messageType === 'PROPOSAL_ACCEPTED'),
     [messages]
+  );
+  const ownEvidence = useMemo(
+    () => evidence.filter((item) => !item.uploaderRole || item.uploaderRole === activeRole),
+    [evidence, activeRole]
   );
 
   const load = useCallback(async () => {
@@ -104,6 +116,11 @@ export function DisputePanel({
   }, [load]);
 
   useEffect(() => {
+    setEvidenceId('');
+    setError('');
+  }, [activeRole]);
+
+  useEffect(() => {
     if (hasAcceptedAgreement && mode === 'PROPOSAL') setMode('MESSAGE');
   }, [hasAcceptedAgreement, mode]);
 
@@ -121,7 +138,7 @@ export function DisputePanel({
     try {
       const proposal = mode === 'PROPOSAL';
       const payload: Record<string, unknown> = {
-        actorRole,
+        actorRole: activeRole,
         body: body.trim(),
         evidenceId: evidenceId || undefined
       };
@@ -162,7 +179,7 @@ export function DisputePanel({
       const response = await fetch(`/api/backend/deals/${dealId}/dispute/proposals/${proposalId}/respond`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actorRole, decision })
+        body: JSON.stringify({ actorRole: activeRole, decision })
       });
       if (!response.ok) {
         const responseBody = await response.json().catch(() => null);
@@ -184,7 +201,7 @@ export function DisputePanel({
       const response = await fetch(`/api/backend/deals/${dealId}/dispute/assistance/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actorRole })
+        body: JSON.stringify({ actorRole: activeRole })
       });
       if (!response.ok) {
         const responseBody = await response.json().catch(() => null);
@@ -205,13 +222,17 @@ export function DisputePanel({
     <section className="card spacing-top dispute-panel">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Урегулирование</p>
+          <p className="eyebrow">Урегулирование · {roleLabel(activeRole)}</p>
           <h2>Канал спора между сторонами</h2>
         </div>
-        <span className="muted small">Переговоры входят в сделку. Сопровождение Amanat Deal — отдельная услуга.</span>
+        <span className="muted small">История общая для обеих сторон</span>
       </div>
 
-      <div className="notice warning">
+      <div className="role-context">
+        Сообщения и предложения с этой вкладки отправляются от имени стороны <strong>{roleLabel(activeRole)}</strong>.
+      </div>
+
+      <div className="notice warning spacing-top-small">
         Принятие предложения фиксирует соглашение сторон. Фактический возврат или выплата выполняются отдельной backend-командой после проверки оснований.
       </div>
 
@@ -223,10 +244,10 @@ export function DisputePanel({
           </>
         ) : (
           <>
-            Стороны могут договориться самостоятельно без доплаты. При необходимости можно запросить платное сопровождение: структурирование материалов, проверку полноты доказательств и помощь в фиксации соглашения.
+            Стороны могут договориться самостоятельно без доплаты. При необходимости можно запросить платное сопровождение Amanat Deal.
             <div className="spacing-top-small">
               <button className="button secondary" disabled={busy || hasAcceptedAgreement} onClick={() => void requestAssistance()}>
-                Запросить сопровождение спора
+                Запросить сопровождение как {roleLabel(activeRole).toLowerCase()}
               </button>
             </div>
           </>
@@ -242,11 +263,11 @@ export function DisputePanel({
       <div className="dispute-messages spacing-top">
         {messages.map((item) => {
           const isProposal = item.messageType === 'PROPOSAL';
-          const canRespond = isProposal && !hasAcceptedAgreement && item.actorRole !== actorRole && !respondedProposalIds.has(item.id);
+          const canRespond = isProposal && !hasAcceptedAgreement && item.actorRole !== activeRole && !respondedProposalIds.has(item.id);
           return (
             <div className={`dispute-message role-${item.actorRole.toLowerCase()}`} key={item.id}>
               <div className="dispute-message-head">
-                <strong>{item.actorRole === 'BUYER' ? 'Покупатель' : item.actorRole === 'SELLER' ? 'Продавец' : item.actorRole}</strong>
+                <strong>{roleLabel(item.actorRole)}</strong>
                 <span className="muted small">{dateTime(item.createdAt)}</span>
               </div>
               {isProposal ? (
@@ -265,7 +286,7 @@ export function DisputePanel({
               ) : null}
               {canRespond ? (
                 <div className="button-row spacing-top-small">
-                  <button className="button" disabled={busy} onClick={() => void respond(item.id, 'ACCEPT')}>Принять</button>
+                  <button className="button" disabled={busy} onClick={() => void respond(item.id, 'ACCEPT')}>Принять от имени {roleLabel(activeRole).toLowerCase()}</button>
                   <button className="button secondary" disabled={busy} onClick={() => void respond(item.id, 'REJECT')}>Отклонить</button>
                 </div>
               ) : null}
@@ -276,26 +297,19 @@ export function DisputePanel({
       </div>
 
       <form className="form dispute-form spacing-top" onSubmit={submit}>
-        <div className="form-grid-3">
+        <div className="form-grid-2">
           <label className="field">
-            <span>Роль в пилоте</span>
-            <select value={actorRole} onChange={(event) => setActorRole(event.target.value)}>
-              <option value="BUYER">Покупатель</option>
-              <option value="SELLER">Продавец</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>Тип</span>
+            <span>Тип обращения</span>
             <select value={mode} onChange={(event) => setMode(event.target.value as 'MESSAGE' | 'PROPOSAL')}>
-              <option value="MESSAGE">Сообщение</option>
+              <option value="MESSAGE">Сообщение другой стороне</option>
               <option value="PROPOSAL" disabled={hasAcceptedAgreement}>Предложение урегулирования</option>
             </select>
           </label>
           <label className="field">
-            <span>Приложить доказательство</span>
+            <span>Приложить своё доказательство</span>
             <select value={evidenceId} onChange={(event) => setEvidenceId(event.target.value)}>
               <option value="">Без файла</option>
-              {evidence.map((item) => <option key={item.id} value={item.id}>{item.fileName}</option>)}
+              {ownEvidence.map((item) => <option key={item.id} value={item.id}>{item.fileName}</option>)}
             </select>
           </label>
         </div>
@@ -326,7 +340,7 @@ export function DisputePanel({
         ) : null}
 
         <label className="field">
-          <span>{mode === 'PROPOSAL' ? 'Условия предложения' : 'Сообщение другой стороне'}</span>
+          <span>{mode === 'PROPOSAL' ? 'Условия предложения' : `Сообщение от стороны «${roleLabel(activeRole)}»`}</span>
           <textarea rows={4} maxLength={5000} value={body} onChange={(event) => setBody(event.target.value)} />
         </label>
         {error ? <div className="notice error">{error}</div> : null}
