@@ -7,6 +7,7 @@ import { EvidencePanel } from './EvidencePanel';
 import { DisputePanel } from './DisputePanel';
 
 type DealRole = 'SELLER' | 'BUYER' | 'ADMIN';
+type PartyRole = 'SELLER' | 'BUYER';
 
 type Payment = {
   id: string;
@@ -33,6 +34,7 @@ type Deal = {
   amountKzt: number;
   platformFeeKzt: number;
   protectionPlan: 'BASIC' | 'EXTENDED';
+  creatorRole: PartyRole | null;
   inspectionHours: number;
   status: string;
   fundsSecuredAt: string | null;
@@ -55,7 +57,7 @@ type DealEvent = {
 };
 
 const statusLabels: Record<string, string> = {
-  WAITING_BUYER: 'Ожидает принятия покупателем',
+  WAITING_COUNTERPARTY: 'Ожидает вторую сторону',
   WAITING_PAYMENT: 'Ожидает оплаты',
   FUNDS_SECURED: 'Средства зарезервированы',
   WAITING_SHIPMENT: 'Ожидает отправки',
@@ -76,7 +78,11 @@ const protectionLabels: Record<string, string> = {
 
 const eventLabels: Record<string, string> = {
   'deal.created': 'Сделка создана',
-  'deal.accepted': 'Условия приняты',
+  'deal.invitation_created': 'Создано приглашение второй стороне',
+  'deal.invitation_reissued': 'Приглашение перевыпущено',
+  'deal.invitation_claimed': 'Вторая сторона присоединилась',
+  'deal.party_accepted': 'Условия приняты стороной',
+  'deal.accepted': 'Условия приняты обеими сторонами',
   'mock_escrow.funds_secured': 'Mock-escrow зарезервировал средства',
   'deal.ready_for_shipment': 'Сделка готова к отправке',
   'shipment.added': 'Добавлена отправка',
@@ -96,6 +102,10 @@ function roleLabel(role: DealRole) {
   if (role === 'SELLER') return 'Продавец';
   if (role === 'BUYER') return 'Покупатель';
   return 'Админ';
+}
+
+function oppositeRole(role: PartyRole) {
+  return role === 'SELLER' ? 'BUYER' : 'SELLER';
 }
 
 function money(value: number) {
@@ -150,6 +160,13 @@ export default function DealPage() {
       setLoading(false);
     }
   }, [id]);
+
+  useEffect(() => {
+    const requestedRole = new URLSearchParams(window.location.search).get('role');
+    if (requestedRole === 'SELLER' || requestedRole === 'BUYER' || requestedRole === 'ADMIN') {
+      setActiveRole(requestedRole);
+    }
+  }, []);
 
   useEffect(() => {
     void load();
@@ -233,19 +250,42 @@ export default function DealPage() {
       return <div className="notice warning">Обычный ход сделки остановлен. Ниже доступен общий канал урегулирования.</div>;
     }
 
-    if (activeRole === 'BUYER') {
-      if (currentDeal.status === 'WAITING_BUYER') {
+    if (currentDeal.status === 'WAITING_COUNTERPARTY') {
+      if (!currentDeal.creatorRole) {
+        if (activeRole === 'BUYER') {
+          return (
+            <>
+              <p className="muted">Это старая пилотная сделка. Покупатель может принять условия по прежнему сценарию.</p>
+              <button className="button" disabled={acting} onClick={() => void post('accept', { actorRole: 'BUYER' })}>Принять условия</button>
+            </>
+          );
+        }
+        return <div className="role-waiting"><strong>Ждём покупателя.</strong><span>Эта сделка была создана до появления приглашений.</span></div>;
+      }
+
+      const invitedRole = oppositeRole(currentDeal.creatorRole);
+      if (activeRole === invitedRole) {
         return (
           <>
-            <p className="muted">Проверьте условия сделки. После принятия станет доступен этап оплаты.</p>
-            <button className="button" disabled={acting} onClick={() => void post('accept')}>Принять условия</button>
+            <p className="muted">Вы присоединились как вторая сторона. Проверьте условия и подтвердите их, чтобы сделка перешла к оплате.</p>
+            <button className="button" disabled={acting} onClick={() => void post('accept', { actorRole: activeRole })}>Принять условия</button>
           </>
         );
       }
+
+      return (
+        <div className="role-waiting">
+          <strong>Ждём вторую сторону.</strong>
+          <span>Приглашённый участник должен присоединиться и подтвердить условия.</span>
+        </div>
+      );
+    }
+
+    if (activeRole === 'BUYER') {
       if (currentDeal.status === 'WAITING_PAYMENT') {
         return (
           <>
-            <p className="muted">В пилоте реальный банк ещё не подключён. Кнопка имитирует резервирование средств покупателя.</p>
+            <p className="muted">Обе стороны приняли условия. В пилоте кнопка имитирует резервирование средств покупателя.</p>
             <button className="button" disabled={acting} onClick={() => void post('mock-payment')}>Mock-оплата</button>
           </>
         );
@@ -272,9 +312,6 @@ export default function DealPage() {
     }
 
     if (activeRole === 'SELLER') {
-      if (currentDeal.status === 'WAITING_BUYER') {
-        return <div className="role-waiting"><strong>Ждём покупателя.</strong><span>Покупатель должен принять условия сделки.</span></div>;
-      }
       if (currentDeal.status === 'WAITING_PAYMENT') {
         return <div className="role-waiting"><strong>Ждём оплату.</strong><span>После резервирования средств продавцу откроется этап отправки.</span></div>;
       }
@@ -282,14 +319,8 @@ export default function DealPage() {
         return (
           <form className="form" onSubmit={submitShipment}>
             <p className="muted">Перед отправкой закройте обязательные пункты своего чек-листа ниже.</p>
-            <label className="field">
-              <span>Перевозчик</span>
-              <input value={carrier} onChange={(event) => setCarrier(event.target.value)} placeholder="QazPost" />
-            </label>
-            <label className="field">
-              <span>Трек-номер</span>
-              <input value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="TEST123456KZ" />
-            </label>
+            <label className="field"><span>Перевозчик</span><input value={carrier} onChange={(event) => setCarrier(event.target.value)} placeholder="QazPost" /></label>
+            <label className="field"><span>Трек-номер</span><input value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="TEST123456KZ" /></label>
             <button className="button" disabled={acting} type="submit">Зафиксировать отправку</button>
           </form>
         );
@@ -316,19 +347,14 @@ export default function DealPage() {
 
       <section className="card hero-card">
         <div className="deal-title-row">
-          <div>
-            <p className="eyebrow">Сделка · {deal.publicCode}</p>
-            <h1>{deal.title}</h1>
-          </div>
-          <div className="amount-block">
-            <strong>{money(deal.amountKzt)}</strong>
-            <span>{protectionLabels[deal.protectionPlan] ?? deal.protectionPlan} · комиссия {money(deal.platformFeeKzt)}</span>
-          </div>
+          <div><p className="eyebrow">Сделка · {deal.publicCode}</p><h1>{deal.title}</h1></div>
+          <div className="amount-block"><strong>{money(deal.amountKzt)}</strong><span>{protectionLabels[deal.protectionPlan] ?? deal.protectionPlan} · комиссия {money(deal.platformFeeKzt)}</span></div>
         </div>
         <p className="deal-description">{deal.description}</p>
         <div className="meta-grid">
           <div><span>Категория</span><strong>{deal.category}</strong></div>
           <div><span>Защита</span><strong>{protectionLabels[deal.protectionPlan] ?? deal.protectionPlan}</strong></div>
+          <div><span>Создатель</span><strong>{deal.creatorRole ? roleLabel(deal.creatorRole) : 'Старая пилотная сделка'}</strong></div>
           <div><span>Срок проверки</span><strong>{deal.inspectionHours} ч.</strong></div>
           <div><span>Создана</span><strong>{dateTime(deal.createdAt)}</strong></div>
           <div><span>Проверка до</span><strong>{dateTime(deal.inspectionEndsAt)}</strong></div>
@@ -339,21 +365,12 @@ export default function DealPage() {
         <div>
           <p className="eyebrow">Пилотный стенд ролей</p>
           <h2>Просмотр сделки</h2>
-          <p className="muted">Сейчас можно переключать три роли для тестирования. В рабочей версии пользователь увидит только свою роль, а админ будет работать в отдельном кабинете.</p>
+          <p className="muted">Сейчас роли можно переключать для тестирования. После авторизации участник будет видеть только свой интерфейс, а админ переедет в отдельный кабинет.</p>
         </div>
         <div className="role-tabs" role="tablist" aria-label="Режим просмотра сделки">
-          <button className={`role-tab ${activeRole === 'SELLER' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'SELLER'} onClick={() => setActiveRole('SELLER')}>
-            <span>Продавец</span>
-            <small>Доказательства · отправка · ожидание выплаты</small>
-          </button>
-          <button className={`role-tab ${activeRole === 'BUYER' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'BUYER'} onClick={() => setActiveRole('BUYER')}>
-            <span>Покупатель</span>
-            <small>Принятие · оплата · получение · проверка</small>
-          </button>
-          <button className={`role-tab ${activeRole === 'ADMIN' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'ADMIN'} onClick={() => setActiveRole('ADMIN')}>
-            <span>Админ</span>
-            <small>Контроль · аудит · доказательства · спор</small>
-          </button>
+          <button className={`role-tab ${activeRole === 'SELLER' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'SELLER'} onClick={() => setActiveRole('SELLER')}><span>Продавец</span><small>Доказательства · отправка · ожидание выплаты</small></button>
+          <button className={`role-tab ${activeRole === 'BUYER' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'BUYER'} onClick={() => setActiveRole('BUYER')}><span>Покупатель</span><small>Принятие · оплата · получение · проверка</small></button>
+          <button className={`role-tab ${activeRole === 'ADMIN' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'ADMIN'} onClick={() => setActiveRole('ADMIN')}><span>Админ</span><small>Контроль · аудит · доказательства · спор</small></button>
         </div>
       </section>
 
@@ -367,10 +384,7 @@ export default function DealPage() {
             <details className="problem-box">
               <summary>Сообщить о проблеме как {roleLabel(activeRole).toLowerCase()}</summary>
               <form className="form compact" onSubmit={submitProblem}>
-                <label className="field">
-                  <span>Что не соответствует условиям?</span>
-                  <textarea rows={3} value={problemReason} onChange={(event) => setProblemReason(event.target.value)} placeholder="Опишите конкретное нарушение условий сделки" />
-                </label>
+                <label className="field"><span>Что не соответствует условиям?</span><textarea rows={3} value={problemReason} onChange={(event) => setProblemReason(event.target.value)} placeholder="Опишите конкретное нарушение условий сделки" /></label>
                 <button className="button danger" disabled={acting} type="submit">Зафиксировать проблему</button>
               </form>
             </details>
@@ -392,15 +406,11 @@ export default function DealPage() {
       </div>
 
       <EvidencePanel dealId={deal.id} protectionPlan={deal.protectionPlan} activeRole={activeRole} onChanged={() => void load()} />
-
       <DisputePanel dealId={deal.id} dealStatus={deal.status} dealAmountKzt={deal.amountKzt} activeRole={activeRole} onChanged={() => void load()} />
 
       <section className="card spacing-top">
         <div className="section-heading">
-          <div>
-            <p className="eyebrow">Общая история</p>
-            <h2>Audit trail сделки</h2>
-          </div>
+          <div><p className="eyebrow">Общая история</p><h2>Audit trail сделки</h2></div>
           <button className="text-button" onClick={() => void load()} disabled={acting}>Обновить</button>
         </div>
         <div className="timeline">
@@ -409,9 +419,7 @@ export default function DealPage() {
               <span className="timeline-dot" />
               <div>
                 <strong>{eventLabels[event.eventType] ?? event.eventType}</strong>
-                <p className="muted small">
-                  {dateTime(event.createdAt)} · {event.fromStatus ? `${event.fromStatus} → ` : ''}{event.toStatus || 'без смены статуса'}
-                </p>
+                <p className="muted small">{dateTime(event.createdAt)} · {event.fromStatus ? `${event.fromStatus} → ` : ''}{event.toStatus || 'без смены статуса'}</p>
               </div>
             </div>
           ))}
