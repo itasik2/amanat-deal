@@ -33,13 +33,15 @@ h3 { margin-bottom: 10px; }
 .muted { color: #6b7280; }
 .small { font-size: .86rem; }
 .spacing-top { margin-top: 18px; }
+.spacing-top-small { margin-top: 10px; }
 .spacing-bottom { margin-bottom: 18px; }
 
 .button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #111827; padding: 12px 18px; border-radius: 12px; background: #111827; color: white; text-decoration: none; font-weight: 800; min-height: 46px; }
 .button:hover { filter: brightness(1.08); }
 .button.secondary { background: white; color: #111827; border-color: #d1d5db; }
 .button.danger { background: #991b1b; border-color: #991b1b; }
-.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.compact-button { min-height: 38px; padding: 8px 12px; font-size: .84rem; }
+.actions, .button-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .text-button { border: 0; background: transparent; color: #2563eb; font-weight: 800; padding: 8px; }
 
 .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
@@ -47,6 +49,8 @@ h3 { margin-bottom: 10px; }
 .form { display: grid; gap: 16px; margin-top: 24px; }
 .form.compact { margin-top: 14px; }
 .form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.form-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.form-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .field { display: grid; gap: 7px; }
 .field > span { font-weight: 750; font-size: .92rem; }
 input, select, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 12px; padding: 12px 13px; background: #fff; color: #111827; outline: none; }
@@ -57,6 +61,7 @@ input:focus, select:focus, textarea:focus { border-color: #64748b; box-shadow: 0
 .notice.error { color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; }
 .notice.success { color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; }
 .notice.warning { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; }
+.compact-notice { padding: 8px 10px; margin-top: 8px; }
 
 .pill, .status { display: inline-flex; align-items: center; width: fit-content; border-radius: 999px; padding: 7px 10px; font-size: .8rem; font-weight: 800; white-space: nowrap; }
 .pill { background: #eef2ff; color: #3730a3; }
@@ -77,6 +82,19 @@ input:focus, select:focus, textarea:focus { border-color: #64748b; box-shadow: 0
 .meta-grid span { color: #64748b; font-size: .78rem; }
 .meta-grid strong { font-size: .92rem; overflow-wrap: anywhere; }
 
+.role-switch-card { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr); gap: 24px; align-items: center; }
+.role-switch-card p:last-child { margin-bottom: 0; }
+.role-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 6px; background: #f1f5f9; border-radius: 18px; }
+.role-tab { display: grid; gap: 4px; text-align: left; border: 1px solid transparent; border-radius: 14px; padding: 15px 16px; background: transparent; color: #475569; }
+.role-tab span { font-size: 1rem; font-weight: 850; }
+.role-tab small { color: #64748b; line-height: 1.35; }
+.role-tab.active { background: #fff; color: #111827; border-color: #cbd5e1; box-shadow: 0 5px 14px rgba(15, 23, 42, .08); }
+.role-tab.active small { color: #475569; }
+.role-action-card { border-top: 4px solid #334155; }
+.role-context { border: 1px solid #dbeafe; background: #eff6ff; color: #1e3a8a; border-radius: 12px; padding: 11px 13px; line-height: 1.45; }
+.role-waiting { display: grid; gap: 6px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 14px; padding: 15px; }
+.role-waiting span { color: #64748b; line-height: 1.45; }
+
 .facts { margin: 0; display: grid; }
 .facts > div { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 11px 0; border-bottom: 1px solid #eef2f7; }
 .facts > div:last-child { border-bottom: 0; }
@@ -92,6 +110,18 @@ input:focus, select:focus, textarea:focus { border-color: #64748b; box-shadow: 0
 .timeline-dot { width: 14px; height: 14px; margin-top: 3px; border: 3px solid #fff; border-radius: 50%; background: #334155; box-shadow: 0 0 0 1px #cbd5e1; z-index: 1; }
 .timeline-item p { margin: 4px 0 0; }
 
+.evidence-list, .dispute-messages { display: grid; gap: 10px; }
+.evidence-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid #e5e7eb; border-radius: 14px; padding: 13px 14px; }
+.evidence-main { min-width: 0; display: grid; gap: 5px; }
+.hash { display: block; max-width: 100%; overflow-wrap: anywhere; color: #475569; font-size: .76rem; }
+.dispute-message { border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px; background: #fff; }
+.dispute-message.role-buyer { border-left: 4px solid #2563eb; }
+.dispute-message.role-seller { border-left: 4px solid #059669; }
+.dispute-message.role-system { border-left: 4px solid #64748b; background: #f8fafc; }
+.dispute-message-head { display: flex; justify-content: space-between; gap: 12px; }
+.dispute-message p { margin: 10px 0; white-space: pre-wrap; }
+.proposal-badge { display: inline-flex; margin-top: 9px; padding: 6px 9px; border-radius: 999px; background: #fef3c7; color: #92400e; font-weight: 750; font-size: .82rem; }
+
 .deal-list { display: grid; gap: 10px; }
 .deal-row { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 17px 18px; border: 1px solid #e5e7eb; border-radius: 16px; background: white; text-decoration: none; transition: transform .12s ease, border-color .12s ease; }
 .deal-row:hover { transform: translateY(-1px); border-color: #cbd5e1; }
@@ -102,11 +132,12 @@ input:focus, select:focus, textarea:focus { border-color: #64748b; box-shadow: 0
 
 @media (max-width: 760px) {
   .page { padding: 22px 14px 44px; }
-  .hero-layout, .two-column, .form-grid, .meta-grid { grid-template-columns: 1fr; }
-  .page-header, .section-heading, .deal-title-row, .deal-row { align-items: flex-start; }
-  .deal-title-row, .deal-row { flex-direction: column; }
+  .hero-layout, .two-column, .form-grid, .form-grid-2, .form-grid-3, .meta-grid, .role-switch-card, .role-tabs { grid-template-columns: 1fr; }
+  .page-header, .section-heading, .deal-title-row, .deal-row, .evidence-item { align-items: flex-start; }
+  .deal-title-row, .deal-row, .evidence-item { flex-direction: column; }
   .amount-block, .deal-row-right { justify-items: start; text-align: left; }
   .facts > div { grid-template-columns: 1fr; gap: 4px; }
   .facts dd { text-align: left; }
+  .dispute-message-head { flex-direction: column; gap: 4px; }
   h1 { font-size: 2.25rem; }
 }
