@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 
 const allowedActorRoles: DealRole[] = [DealRole.BUYER, DealRole.SELLER, DealRole.ADMIN];
+const partyActorRoles: DealRole[] = [DealRole.BUYER, DealRole.SELLER];
 const disputeStatuses: DealStatus[] = [DealStatus.PROBLEM_REPORTED, DealStatus.WAITING_LEGAL_RESOLUTION];
 
 export type DisputeMessageInput = {
@@ -62,7 +63,7 @@ export class DisputesService {
   async requestAssistance(dealId: string, input: DisputeAssistanceRequestInput) {
     const deal = await this.ensureDisputeDeal(dealId);
     await this.ensureNoAcceptedSettlement(dealId);
-    const actorRole = this.parseActorRole(input.actorRole);
+    const actorRole = this.parsePartyRole(input.actorRole);
 
     const existing = await this.prisma.disputeAssistance.findUnique({ where: { dealId } });
     if (existing) return existing;
@@ -127,7 +128,7 @@ export class DisputesService {
   async proposal(dealId: string, input: DisputeProposalInput) {
     const deal = await this.ensureDisputeDeal(dealId);
     await this.ensureNoAcceptedSettlement(dealId);
-    const actorRole = this.parseActorRole(input.actorRole);
+    const actorRole = this.parsePartyRole(input.actorRole);
     const settlementType = this.parseSettlementType(input.settlementType);
     const body = this.requireBody(input.body);
     const amountKzt = this.resolveProposalAmount(settlementType, input.amountKzt, deal.amountKzt);
@@ -169,7 +170,7 @@ export class DisputesService {
 
   async respond(dealId: string, proposalId: string, input: DisputeResponseInput) {
     const deal = await this.ensureDisputeDeal(dealId);
-    const actorRole = this.parseActorRole(input.actorRole);
+    const actorRole = this.parsePartyRole(input.actorRole);
     const decision = input.decision;
     if (decision !== 'ACCEPT' && decision !== 'REJECT') {
       throw new BadRequestException('Decision must be ACCEPT or REJECT');
@@ -286,6 +287,14 @@ export class DisputesService {
     const role = value as DealRole;
     if (!allowedActorRoles.includes(role)) {
       throw new BadRequestException('Actor role must be BUYER, SELLER or ADMIN');
+    }
+    return role;
+  }
+
+  private parsePartyRole(value?: string) {
+    const role = value as DealRole;
+    if (!partyActorRoles.includes(role)) {
+      throw new BadRequestException('Only BUYER or SELLER can perform this dispute action');
     }
     return role;
   }
