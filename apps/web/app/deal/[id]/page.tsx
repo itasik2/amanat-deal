@@ -3,6 +3,10 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { EvidencePanel } from './EvidencePanel';
+import { DisputePanel } from './DisputePanel';
+
+type DealRole = 'SELLER' | 'BUYER';
 
 type Payment = {
   id: string;
@@ -85,6 +89,10 @@ const eventLabels: Record<string, string> = {
   'dispute.settlement_agreed': 'Стороны зафиксировали соглашение'
 };
 
+function roleLabel(role: DealRole) {
+  return role === 'SELLER' ? 'Продавец' : 'Покупатель';
+}
+
 function money(value: number) {
   return new Intl.NumberFormat('ru-RU').format(value) + ' ₸';
 }
@@ -109,6 +117,7 @@ export default function DealPage() {
   const id = params.id;
   const [deal, setDeal] = useState<Deal | null>(null);
   const [events, setEvents] = useState<DealEvent[]>([]);
+  const [activeRole, setActiveRole] = useState<DealRole>('SELLER');
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState('');
@@ -140,6 +149,11 @@ export default function DealPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setProblemReason('');
+    setError('');
+  }, [activeRole]);
 
   async function post(path: string, body?: unknown) {
     setActing(true);
@@ -196,6 +210,87 @@ export default function DealPage() {
   const payment = deal.payments.at(-1);
   const canReportProblem = ['WAITING_SHIPMENT', 'SHIPPED', 'DELIVERED', 'INSPECTION'].includes(deal.status);
 
+  function roleAction() {
+    if (deal.status === 'COMPLETED') {
+      return <div className="notice success">Сделка завершена. Выплата продавцу зафиксирована в истории.</div>;
+    }
+
+    if (deal.status === 'PROBLEM_REPORTED' || deal.status === 'WAITING_LEGAL_RESOLUTION') {
+      return <div className="notice warning">Обычный ход сделки остановлен. Ниже доступен общий канал урегулирования.</div>;
+    }
+
+    if (activeRole === 'BUYER') {
+      if (deal.status === 'WAITING_BUYER') {
+        return (
+          <>
+            <p className="muted">Проверьте условия сделки. После принятия станет доступен этап оплаты.</p>
+            <button className="button" disabled={acting} onClick={() => void post('accept')}>Принять условия</button>
+          </>
+        );
+      }
+      if (deal.status === 'WAITING_PAYMENT') {
+        return (
+          <>
+            <p className="muted">В пилоте реальный банк ещё не подключён. Кнопка имитирует резервирование средств покупателя.</p>
+            <button className="button" disabled={acting} onClick={() => void post('mock-payment')}>Mock-оплата</button>
+          </>
+        );
+      }
+      if (deal.status === 'WAITING_SHIPMENT') {
+        return <div className="role-waiting"><strong>Ваше действие пока не требуется.</strong><span>Продавец должен добавить обязательные материалы и зафиксировать отправку.</span></div>;
+      }
+      if (deal.status === 'SHIPPED') {
+        return (
+          <>
+            <p className="muted">В пилоте покупатель вручную подтверждает факт доставки. Позже это событие должен давать перевозчик.</p>
+            <button className="button" disabled={acting} onClick={() => void post('mark-delivered')}>Подтвердить доставку</button>
+          </>
+        );
+      }
+      if (deal.status === 'INSPECTION') {
+        return (
+          <>
+            <p className="muted">Проверьте предмет сделки до {dateTime(deal.inspectionEndsAt)} и закройте свой чек-лист доказательств.</p>
+            <button className="button" disabled={acting} onClick={() => void post('confirm-receipt')}>Подтвердить получение</button>
+          </>
+        );
+      }
+    }
+
+    if (activeRole === 'SELLER') {
+      if (deal.status === 'WAITING_BUYER') {
+        return <div className="role-waiting"><strong>Ждём покупателя.</strong><span>Покупатель должен открыть свою вкладку и принять условия.</span></div>;
+      }
+      if (deal.status === 'WAITING_PAYMENT') {
+        return <div className="role-waiting"><strong>Ждём оплату.</strong><span>После резервирования средств продавцу откроется этап отправки.</span></div>;
+      }
+      if (deal.status === 'WAITING_SHIPMENT') {
+        return (
+          <form className="form" onSubmit={submitShipment}>
+            <p className="muted">Перед отправкой закройте обязательные пункты своего чек-листа ниже.</p>
+            <label className="field">
+              <span>Перевозчик</span>
+              <input value={carrier} onChange={(event) => setCarrier(event.target.value)} placeholder="QazPost" />
+            </label>
+            <label className="field">
+              <span>Трек-номер</span>
+              <input value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="TEST123456KZ" />
+            </label>
+            <button className="button" disabled={acting} type="submit">Зафиксировать отправку</button>
+          </form>
+        );
+      }
+      if (deal.status === 'SHIPPED') {
+        return <div className="role-waiting"><strong>Отправка зафиксирована.</strong><span>Теперь ждём подтверждения доставки покупателем или перевозчиком.</span></div>;
+      }
+      if (deal.status === 'INSPECTION') {
+        return <div className="role-waiting"><strong>Покупатель проверяет результат.</strong><span>До завершения проверки средства остаются защищены условиями сделки.</span></div>;
+      }
+    }
+
+    return <div className="role-waiting"><strong>Ожидаем следующий этап.</strong><span>Текущий статус: {statusLabels[deal.status] ?? deal.status}.</span></div>;
+  }
+
   return (
     <main className="page">
       <div className="page-header">
@@ -226,64 +321,45 @@ export default function DealPage() {
         </div>
       </section>
 
+      <section className="card role-switch-card spacing-top">
+        <div>
+          <p className="eyebrow">Роль в сделке</p>
+          <h2>Кто вы в этой сделке?</h2>
+          <p className="muted">В пилоте роль переключается вручную. После авторизации система определит её автоматически.</p>
+        </div>
+        <div className="role-tabs" role="tablist" aria-label="Роль в сделке">
+          <button
+            className={`role-tab ${activeRole === 'SELLER' ? 'active' : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={activeRole === 'SELLER'}
+            onClick={() => setActiveRole('SELLER')}
+          >
+            <span>Продавец</span>
+            <small>Условия · доказательства · отправка</small>
+          </button>
+          <button
+            className={`role-tab ${activeRole === 'BUYER' ? 'active' : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={activeRole === 'BUYER'}
+            onClick={() => setActiveRole('BUYER')}
+          >
+            <span>Покупатель</span>
+            <small>Принятие · оплата · проверка</small>
+          </button>
+        </div>
+      </section>
+
       <div className="two-column spacing-top">
-        <section className="card">
-          <p className="eyebrow">Следующее действие</p>
+        <section className="card role-action-card">
+          <p className="eyebrow">{roleLabel(activeRole)} · следующее действие</p>
           <h2>{statusLabels[deal.status] ?? deal.status}</h2>
-
-          {deal.status === 'WAITING_BUYER' ? (
-            <>
-              <p className="muted">В пилоте эта кнопка имитирует принятие условий второй стороной.</p>
-              <button className="button" disabled={acting} onClick={() => void post('accept')}>Принять условия</button>
-            </>
-          ) : null}
-
-          {deal.status === 'WAITING_PAYMENT' ? (
-            <>
-              <p className="muted">Реальных денег пока нет. Mock-escrow создаст платёж и зафиксирует резервирование.</p>
-              <button className="button" disabled={acting} onClick={() => void post('mock-payment')}>Mock-оплата</button>
-            </>
-          ) : null}
-
-          {deal.status === 'WAITING_SHIPMENT' ? (
-            <form className="form" onSubmit={submitShipment}>
-              <label className="field">
-                <span>Перевозчик</span>
-                <input value={carrier} onChange={(event) => setCarrier(event.target.value)} placeholder="QazPost" />
-              </label>
-              <label className="field">
-                <span>Трек-номер</span>
-                <input value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="TEST123456KZ" />
-              </label>
-              <button className="button" disabled={acting} type="submit">Зафиксировать отправку</button>
-            </form>
-          ) : null}
-
-          {deal.status === 'SHIPPED' ? (
-            <>
-              <p className="muted">Для пилота доставка подтверждается вручную. Позже это событие должен давать API перевозчика.</p>
-              <button className="button" disabled={acting} onClick={() => void post('mark-delivered')}>Отметить доставленным</button>
-            </>
-          ) : null}
-
-          {deal.status === 'INSPECTION' ? (
-            <>
-              <p className="muted">Покупатель проверяет предмет сделки до {dateTime(deal.inspectionEndsAt)}.</p>
-              <button className="button" disabled={acting} onClick={() => void post('confirm-receipt')}>Подтвердить получение</button>
-            </>
-          ) : null}
-
-          {deal.status === 'COMPLETED' ? (
-            <div className="notice success">Сделка завершена. В mock-режиме выплата продавцу зафиксирована в истории.</div>
-          ) : null}
-
-          {deal.status === 'PROBLEM_REPORTED' ? (
-            <div className="notice warning">Выплата остановлена. Проблема зафиксирована для дальнейшего урегулирования.</div>
-          ) : null}
+          {roleAction()}
 
           {canReportProblem ? (
             <details className="problem-box">
-              <summary>Сообщить о проблеме</summary>
+              <summary>Сообщить о проблеме как {roleLabel(activeRole).toLowerCase()}</summary>
               <form className="form compact" onSubmit={submitProblem}>
                 <label className="field">
                   <span>Что не соответствует условиям?</span>
@@ -296,8 +372,8 @@ export default function DealPage() {
         </section>
 
         <section className="card">
-          <p className="eyebrow">Расчёты и доставка</p>
-          <h2>Текущее состояние</h2>
+          <p className="eyebrow">Общее для обеих сторон</p>
+          <h2>Расчёты и доставка</h2>
           <dl className="facts">
             <div><dt>Mock-escrow</dt><dd>{payment ? payment.status : 'Нет платежа'}</dd></div>
             <div><dt>Резервирование</dt><dd>{dateTime(deal.fundsSecuredAt)}</dd></div>
@@ -309,11 +385,26 @@ export default function DealPage() {
         </section>
       </div>
 
+      <EvidencePanel
+        dealId={deal.id}
+        protectionPlan={deal.protectionPlan}
+        activeRole={activeRole}
+        onChanged={() => void load()}
+      />
+
+      <DisputePanel
+        dealId={deal.id}
+        dealStatus={deal.status}
+        dealAmountKzt={deal.amountKzt}
+        activeRole={activeRole}
+        onChanged={() => void load()}
+      />
+
       <section className="card spacing-top">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Audit trail</p>
-            <h2>История сделки</h2>
+            <p className="eyebrow">Общая история</p>
+            <h2>Audit trail сделки</h2>
           </div>
           <button className="text-button" onClick={() => void load()} disabled={acting}>Обновить</button>
         </div>
