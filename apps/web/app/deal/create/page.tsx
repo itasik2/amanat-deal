@@ -2,13 +2,22 @@
 
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 type DealCategory = 'GOODS' | 'SERVICE' | 'REPAIR' | 'EQUIPMENT' | 'OTHER';
 type ProtectionPlan = 'BASIC' | 'EXTENDED';
+type PartyRole = 'SELLER' | 'BUYER';
 
 type CreatedDeal = {
   id: string;
+  publicCode: string;
+  title: string;
+  creatorRole: PartyRole;
+  invitation: {
+    invitedRole: PartyRole;
+    shortCode: string;
+    token: string;
+    expiresAt: string;
+  };
 };
 
 async function parseApiError(response: Response) {
@@ -18,8 +27,12 @@ async function parseApiError(response: Response) {
   return `Ошибка API: ${response.status}`;
 }
 
+function roleLabel(role: PartyRole) {
+  return role === 'SELLER' ? 'продавца' : 'покупателя';
+}
+
 export default function CreateDealPage() {
-  const router = useRouter();
+  const [creatorRole, setCreatorRole] = useState<PartyRole>('SELLER');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<DealCategory>('GOODS');
@@ -28,6 +41,8 @@ export default function CreateDealPage() {
   const [inspectionHours, setInspectionHours] = useState('48');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [created, setCreated] = useState<CreatedDeal | null>(null);
+  const [copied, setCopied] = useState('');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +54,7 @@ export default function CreateDealPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          creatorRole,
           title: title.trim(),
           description: description.trim(),
           category,
@@ -49,14 +65,72 @@ export default function CreateDealPage() {
       });
 
       if (!response.ok) throw new Error(await parseApiError(response));
-
-      const deal = (await response.json()) as CreatedDeal;
-      router.push(`/deal/${deal.id}`);
+      setCreated((await response.json()) as CreatedDeal);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать сделку');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function copy(value: string, label: string) {
+    await navigator.clipboard.writeText(value);
+    setCopied(label);
+    window.setTimeout(() => setCopied(''), 1800);
+  }
+
+  if (created) {
+    const inviteUrl = typeof window === 'undefined'
+      ? `/invite/${created.invitation.token}`
+      : `${window.location.origin}/invite/${created.invitation.token}`;
+
+    return (
+      <main className="page narrow">
+        <div className="page-header">
+          <Link className="back-link" href="/">← На главную</Link>
+          <span className="pill">Сделка создана</span>
+        </div>
+
+        <section className="card hero-card">
+          <p className="eyebrow">{created.publicCode}</p>
+          <h1>Пригласите {roleLabel(created.invitation.invitedRole)}</h1>
+          <p className="lead">
+            Вы создали сделку как {created.creatorRole === 'SELLER' ? 'продавец' : 'покупатель'}. Вторая сторона получает противоположную роль автоматически.
+          </p>
+
+          <div className="notice success spacing-top-small">
+            Условия со стороны создателя уже зафиксированы. После присоединения второй участник проверит их и примет со своей стороны.
+          </div>
+
+          <div className="invite-share spacing-top">
+            <div className="invite-value">
+              <span className="muted small">Ссылка-приглашение</span>
+              <code>{inviteUrl}</code>
+              <button className="button secondary compact-button" type="button" onClick={() => void copy(inviteUrl, 'link')}>
+                {copied === 'link' ? 'Скопировано' : 'Скопировать ссылку'}
+              </button>
+            </div>
+
+            <div className="invite-value">
+              <span className="muted small">Короткий код</span>
+              <strong className="invite-code">{created.invitation.shortCode}</strong>
+              <button className="button secondary compact-button" type="button" onClick={() => void copy(created.invitation.shortCode, 'code')}>
+                {copied === 'code' ? 'Скопировано' : 'Скопировать код'}
+              </button>
+            </div>
+          </div>
+
+          <p className="muted small spacing-top-small">
+            Приглашение действует до {new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(created.invitation.expiresAt))}. Токен в базе хранится только в виде hash.
+          </p>
+
+          <div className="actions spacing-top">
+            <Link className="button" href={`/deal/${created.id}`}>Открыть сделку</Link>
+            <Link className="button secondary" href="/">К списку сделок</Link>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   return (
@@ -70,31 +144,29 @@ export default function CreateDealPage() {
         <p className="eyebrow">Новая сделка</p>
         <h1>Зафиксировать условия</h1>
         <p className="muted">
-          Укажите предмет сделки, сумму, уровень защиты и срок проверки. Доказательства и история событий собираются в любом тарифе.
+          Сначала укажите, кем вы выступаете. После создания Amanat Deal сформирует приглашение для второй стороны.
         </p>
+
+        <div className="role-tabs creator-role-tabs spacing-top-small" role="tablist" aria-label="Роль создателя сделки">
+          <button className={`role-tab ${creatorRole === 'SELLER' ? 'active' : ''}`} type="button" role="tab" aria-selected={creatorRole === 'SELLER'} onClick={() => setCreatorRole('SELLER')}>
+            <span>Я продавец</span>
+            <small>Создаю условия и приглашаю покупателя</small>
+          </button>
+          <button className={`role-tab ${creatorRole === 'BUYER' ? 'active' : ''}`} type="button" role="tab" aria-selected={creatorRole === 'BUYER'} onClick={() => setCreatorRole('BUYER')}>
+            <span>Я покупатель</span>
+            <small>Создаю запрос и приглашаю продавца</small>
+          </button>
+        </div>
 
         <form className="form" onSubmit={submit}>
           <label className="field">
             <span>Название сделки</span>
-            <input
-              required
-              minLength={3}
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Например: комплект автозапчастей"
-            />
+            <input required minLength={3} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Например: комплект автозапчастей" />
           </label>
 
           <label className="field">
             <span>Описание и условия</span>
-            <textarea
-              required
-              minLength={10}
-              rows={5}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Что именно передаётся или выполняется, состояние, комплектация и другие проверяемые условия"
-            />
+            <textarea required minLength={10} rows={5} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Что именно передаётся или выполняется, состояние, комплектация и другие проверяемые условия" />
           </label>
 
           <label className="field">
@@ -107,8 +179,8 @@ export default function CreateDealPage() {
 
           <div className={protectionPlan === 'EXTENDED' ? 'notice warning' : 'notice'}>
             {protectionPlan === 'EXTENDED'
-              ? 'Расширенная защита: усиленный сценарий фиксации состояния, упаковки, серийных данных и исполнения сделки. Доказательства всё равно принадлежат самой сделке, а не отдельной платной функции.'
-              : 'Базовая защита: условия, оплата, доставка, сообщения, audit trail и доказательства входят в сделку. Дополнительное сопровождение спора оплачивается отдельно только при необходимости.'}
+              ? 'Расширенная защита: усиленный сценарий фиксации состояния, упаковки, серийных данных и исполнения сделки.'
+              : 'Базовая защита: условия, оплата, доставка, сообщения, audit trail и доказательства входят в сделку.'}
           </div>
 
           <div className="form-grid">
@@ -125,16 +197,7 @@ export default function CreateDealPage() {
 
             <label className="field">
               <span>Сумма, ₸</span>
-              <input
-                required
-                min={1000}
-                step={1}
-                inputMode="numeric"
-                type="number"
-                value={amountKzt}
-                onChange={(event) => setAmountKzt(event.target.value)}
-                placeholder="100000"
-              />
+              <input required min={1000} step={1} inputMode="numeric" type="number" value={amountKzt} onChange={(event) => setAmountKzt(event.target.value)} placeholder="100000" />
             </label>
 
             <label className="field">
@@ -150,9 +213,7 @@ export default function CreateDealPage() {
           {error ? <div className="notice error">{error}</div> : null}
 
           <div className="actions">
-            <button className="button" type="submit" disabled={submitting}>
-              {submitting ? 'Создаём…' : 'Создать сделку'}
-            </button>
+            <button className="button" type="submit" disabled={submitting}>{submitting ? 'Создаём…' : 'Создать сделку'}</button>
             <Link className="button secondary" href="/">Отмена</Link>
           </div>
         </form>
