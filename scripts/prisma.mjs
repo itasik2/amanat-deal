@@ -22,6 +22,7 @@ const schema = 'packages/database/prisma/schema.prisma';
 const commands = {
   generate: ['generate', '--schema', schema],
   migrate: ['migrate', 'dev', '--schema', schema],
+  deploy: ['migrate', 'deploy', '--schema', schema],
   reset: ['migrate', 'reset', '--schema', schema],
   studio: ['studio', '--schema', schema]
 };
