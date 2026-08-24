@@ -8,7 +8,9 @@ import { StorageProvider, StoredObject } from './storage.provider';
 export class LocalStorageProvider implements StorageProvider {
   private readonly root = process.env.EVIDENCE_STORAGE_DIR
     ? resolve(process.env.EVIDENCE_STORAGE_DIR)
-    : resolve(process.cwd(), '../../.data/evidence');
+    : process.env.RAILWAY_VOLUME_MOUNT_PATH
+      ? resolve(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'evidence')
+      : resolve(process.cwd(), '../../.data/evidence');
 
   async save(dealId: string, originalName: string, buffer: Buffer): Promise<StoredObject> {
     const safeName = originalName.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-120) || 'file';
