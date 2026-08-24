@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "nest start --watch",
+    "prebuild": "cd ../.. && npm run prisma:generate",
     "build": "nest build",
     "start": "node dist/main.js",
     "lint": "echo \"lint api: pending\"",
