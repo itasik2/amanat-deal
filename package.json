@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev -w apps/api\" \"npm run dev -w apps/web\" \"npm run dev -w apps/admin\"",
     "build": "npm run build -ws --if-present",
-    "build:api": "npm run prisma:generate && npm run build -w apps/api",
+    "build:api": "npm run build -w apps/api",
     "start:api": "npm run start -w apps/api",
     "lint": "npm run lint -ws --if-present",
     "test": "npm run test -ws --if-present",
