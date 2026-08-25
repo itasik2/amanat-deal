@@ -6,7 +6,18 @@ export type StoredObject = {
   sizeBytes: number;
 };
 
+export type DirectUploadPlan =
+  | { mode: 'server' }
+  | {
+      mode: 'direct';
+      key: string;
+      uploadUrl: string;
+      fields: Record<string, string>;
+    };
+
 export interface StorageProvider {
   save(dealId: string, originalName: string, buffer: Buffer): Promise<StoredObject>;
   read(key: string): Promise<Buffer>;
+  prepareDirectUpload?(dealId: string, originalName: string): Promise<DirectUploadPlan>;
+  verifyDirectUpload?(dealId: string, key: string): Promise<StoredObject>;
 }
