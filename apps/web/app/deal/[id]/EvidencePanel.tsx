@@ -34,6 +34,15 @@ type ProtectionChecklist = {
   items: ChecklistItem[];
 };
 
+type UploadPlan =
+  | { mode: 'server' }
+  | {
+      mode: 'direct';
+      key: string;
+      uploadUrl: string;
+      fields: Record<string, string>;
+    };
+
 function formatSize(value: number) {
   if (value < 1024) return `${value} Б`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} КБ`;
@@ -177,24 +186,75 @@ export function EvidencePanel({
       setError('Выберите файл');
       return;
     }
+    if (file.size > 25 * 1024 * 1024) {
+      setError('Для пилота максимальный размер доказательства 25 МБ');
+      return;
+    }
 
     setBusy(true);
     setError('');
-    const data = new FormData();
-    data.set('file', file);
-    data.set('kind', kind);
-    data.set('uploaderRole', activeRole);
-    if (note.trim()) data.set('note', note.trim());
 
     try {
-      const response = await fetch(`/api/backend/deals/${dealId}/evidence`, {
+      const prepareResponse = await fetch(`/api/backend/deals/${dealId}/evidence/prepare-upload`, {
         method: 'POST',
-        body: data
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name })
       });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.message || `Ошибка загрузки: ${response.status}`);
+      const plan = await readApiJson<UploadPlan>(prepareResponse, 'Подготовка загрузки');
+
+      if (plan.mode === 'direct') {
+        const cloudinaryForm = new FormData();
+        for (const [name, value] of Object.entries(plan.fields)) {
+          cloudinaryForm.set(name, value);
+        }
+        cloudinaryForm.set('file', file);
+
+        const uploadResponse = await fetch(plan.uploadUrl, {
+          method: 'POST',
+          body: cloudinaryForm
+        });
+
+        if (!uploadResponse.ok) {
+          const text = await uploadResponse.text();
+          let message = `Cloudinary: ошибка загрузки ${uploadResponse.status}`;
+          if (text.trim()) {
+            try {
+              const body = JSON.parse(text) as { error?: { message?: string } };
+              message = body.error?.message || message;
+            } catch {
+              message = text.slice(0, 300);
+            }
+          }
+          throw new Error(message);
+        }
+
+        const finalizeResponse = await fetch(`/api/backend/deals/${dealId}/evidence/finalize-upload`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            key: plan.key,
+            fileName: file.name,
+            mimeType: file.type || 'application/octet-stream',
+            kind,
+            uploaderRole: activeRole,
+            note: note.trim() || undefined
+          })
+        });
+        await readApiJson<Evidence>(finalizeResponse, 'Регистрация доказательства');
+      } else {
+        const data = new FormData();
+        data.set('file', file);
+        data.set('kind', kind);
+        data.set('uploaderRole', activeRole);
+        if (note.trim()) data.set('note', note.trim());
+
+        const response = await fetch(`/api/backend/deals/${dealId}/evidence`, {
+          method: 'POST',
+          body: data
+        });
+        await readApiJson<Evidence>(response, 'Загрузка доказательства');
       }
+
       setFile(null);
       setNote('');
       const input = document.getElementById(`evidence-file-${dealId}`) as HTMLInputElement | null;
