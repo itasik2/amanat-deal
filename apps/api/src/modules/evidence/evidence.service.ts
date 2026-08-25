@@ -10,6 +10,12 @@ export type EvidenceUploadInput = {
   note?: string;
 };
 
+export type EvidenceFinalizeInput = EvidenceUploadInput & {
+  key?: string;
+  fileName?: string;
+  mimeType?: string;
+};
+
 @Injectable()
 export class EvidenceService {
   constructor(
@@ -45,6 +51,54 @@ export class EvidenceService {
     return buildProtectionChecklist(deal.category, deal.protectionPlan, deal.evidence);
   }
 
+  async prepareUpload(dealId: string, fileName?: string) {
+    await this.ensureDeal(dealId);
+    const normalizedName = fileName?.trim();
+    if (!normalizedName) throw new BadRequestException('Original file name is required');
+
+    if (!this.storage.prepareDirectUpload) {
+      return { mode: 'server' as const };
+    }
+
+    return this.storage.prepareDirectUpload(dealId, normalizedName);
+  }
+
+  async finalizeUpload(dealId: string, input: EvidenceFinalizeInput) {
+    await this.ensureDeal(dealId);
+    if (!this.storage.verifyDirectUpload) {
+      throw new BadRequestException('Direct upload is not configured');
+    }
+
+    const key = input.key?.trim();
+    const fileName = input.fileName?.trim();
+    if (!key) throw new BadRequestException('Storage key is required');
+    if (!fileName) throw new BadRequestException('Original file name is required');
+
+    const existing = await this.prisma.evidenceFile.findFirst({
+      where: { dealId, storageUrl: key }
+    });
+    if (existing) return existing;
+
+    const uploaderRole = this.parseRole(input.uploaderRole);
+    const kind = input.kind?.trim().toUpperCase() || 'OTHER';
+    const note = input.note?.trim() || undefined;
+    const stored = await this.storage.verifyDirectUpload(dealId, key);
+
+    if (stored.sizeBytes > 25 * 1024 * 1024) {
+      throw new BadRequestException('Evidence file exceeds the 25 MB pilot limit');
+    }
+
+    return this.createEvidenceRecord({
+      dealId,
+      uploaderRole,
+      kind,
+      fileName,
+      mimeType: input.mimeType?.trim() || 'application/octet-stream',
+      note,
+      stored
+    });
+  }
+
   async upload(dealId: string, file: Express.Multer.File | undefined, input: EvidenceUploadInput) {
     await this.ensureDeal(dealId);
     if (!file) throw new BadRequestException('Evidence file is required');
@@ -55,25 +109,56 @@ export class EvidenceService {
     const note = input.note?.trim() || undefined;
     const stored = await this.storage.save(dealId, file.originalname, file.buffer);
 
+    return this.createEvidenceRecord({
+      dealId,
+      uploaderRole,
+      kind,
+      fileName: file.originalname,
+      mimeType: file.mimetype || 'application/octet-stream',
+      note,
+      stored
+    });
+  }
+
+  async read(dealId: string, evidenceId: string) {
+    await this.ensureDeal(dealId);
+    const evidence = await this.prisma.evidenceFile.findFirst({
+      where: { id: evidenceId, dealId }
+    });
+    if (!evidence) throw new NotFoundException('Evidence not found');
+
+    const buffer = await this.storage.read(evidence.storageUrl);
+    return { evidence, buffer };
+  }
+
+  private createEvidenceRecord(input: {
+    dealId: string;
+    uploaderRole: DealRole;
+    kind: string;
+    fileName: string;
+    mimeType: string;
+    note?: string;
+    stored: { key: string; sha256: string; sizeBytes: number };
+  }) {
     return this.prisma.$transaction(async (tx) => {
       const evidence = await tx.evidenceFile.create({
         data: {
-          dealId,
-          uploaderRole,
-          kind,
-          fileName: file.originalname,
-          mimeType: file.mimetype || 'application/octet-stream',
-          sizeBytes: stored.sizeBytes,
-          storageUrl: stored.key,
-          sha256: stored.sha256,
-          note
+          dealId: input.dealId,
+          uploaderRole: input.uploaderRole,
+          kind: input.kind,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          sizeBytes: input.stored.sizeBytes,
+          storageUrl: input.stored.key,
+          sha256: input.stored.sha256,
+          note: input.note
         }
       });
 
       await tx.dealEvent.create({
         data: {
-          dealId,
-          actorRole: uploaderRole,
+          dealId: input.dealId,
+          actorRole: input.uploaderRole,
           eventType: 'evidence.uploaded',
           payload: {
             evidenceId: evidence.id,
@@ -87,17 +172,6 @@ export class EvidenceService {
 
       return evidence;
     });
-  }
-
-  async read(dealId: string, evidenceId: string) {
-    await this.ensureDeal(dealId);
-    const evidence = await this.prisma.evidenceFile.findFirst({
-      where: { id: evidenceId, dealId }
-    });
-    if (!evidence) throw new NotFoundException('Evidence not found');
-
-    const buffer = await this.storage.read(evidence.storageUrl);
-    return { evidence, buffer };
   }
 
   private async ensureDeal(dealId: string) {
