@@ -10,7 +10,7 @@ import {
   UseInterceptors
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { EvidenceService, EvidenceUploadInput } from './evidence.service';
+import { EvidenceFinalizeInput, EvidenceService, EvidenceUploadInput } from './evidence.service';
 
 @Controller('deals')
 export class EvidenceController {
@@ -24,6 +24,16 @@ export class EvidenceController {
   @Get(':id/protection-checklist')
   checklist(@Param('id') id: string) {
     return this.evidence.checklist(id);
+  }
+
+  @Post(':id/evidence/prepare-upload')
+  prepareUpload(@Param('id') id: string, @Body() body: { fileName?: string }) {
+    return this.evidence.prepareUpload(id, body.fileName);
+  }
+
+  @Post(':id/evidence/finalize-upload')
+  finalizeUpload(@Param('id') id: string, @Body() body: EvidenceFinalizeInput) {
+    return this.evidence.finalizeUpload(id, body);
   }
 
   @Post(':id/evidence')
