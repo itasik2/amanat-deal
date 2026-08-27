@@ -33,7 +33,7 @@ if (!args) {
   process.exit(1);
 }
 
-if (!process.env.DATABASE_URL) {
+if (command !== 'generate' && !process.env.DATABASE_URL) {
   console.error('\nDATABASE_URL is not set.');
   console.error(`Expected it in ${resolve(root, '.env')}, .env.local, or the process environment.`);
   process.exit(1);
