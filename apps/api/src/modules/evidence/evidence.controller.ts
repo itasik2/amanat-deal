@@ -5,7 +5,6 @@ import {
   Param,
   Post,
   Res,
-  StreamableFile,
   UploadedFile,
   UseInterceptors
 } from '@nestjs/common';
@@ -50,15 +49,20 @@ export class EvidenceController {
   async file(
     @Param('id') id: string,
     @Param('evidenceId') evidenceId: string,
-    @Res({ passthrough: true }) response: any
+    @Res() response: any
   ) {
-    const { evidence, buffer } = await this.evidence.read(id, evidenceId);
-    response.setHeader('Content-Type', evidence.mimeType);
+    const access = await this.evidence.read(id, evidenceId);
+
+    if ('url' in access) {
+      return response.redirect(302, access.url);
+    }
+
+    response.setHeader('Content-Type', access.evidence.mimeType);
     response.setHeader(
       'Content-Disposition',
-      `inline; filename*=UTF-8''${encodeURIComponent(evidence.fileName)}`
+      `inline; filename*=UTF-8''${encodeURIComponent(access.evidence.fileName)}`
     );
-    response.setHeader('X-Evidence-SHA256', evidence.sha256);
-    return new StreamableFile(buffer);
+    response.setHeader('X-Evidence-SHA256', access.evidence.sha256);
+    return response.send(access.buffer);
   }
 }
