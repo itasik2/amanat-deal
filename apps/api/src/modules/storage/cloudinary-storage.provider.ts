@@ -94,6 +94,28 @@ export class CloudinaryStorageProvider implements StorageProvider {
     };
   }
 
+  async temporaryReadUrl(key: string, expiresInSeconds = 300): Promise<string> {
+    this.assertConfigured();
+
+    const publicId = this.publicIdFromKey(key);
+    if (!publicId.startsWith('amanat/evidence/')) {
+      throw new Error('Invalid Cloudinary evidence path');
+    }
+
+    const fileName = publicId.split('/').pop() || '';
+    const dotIndex = fileName.lastIndexOf('.');
+    const format = dotIndex > 0 && dotIndex < fileName.length - 1
+      ? fileName.slice(dotIndex + 1)
+      : 'bin';
+
+    return cloudinary.utils.private_download_url(publicId, format, {
+      resource_type: 'raw',
+      type: 'authenticated',
+      expires_at: Math.floor(Date.now() / 1000) + expiresInSeconds,
+      attachment: false
+    });
+  }
+
   async read(key: string): Promise<Buffer> {
     this.assertConfigured();
 
