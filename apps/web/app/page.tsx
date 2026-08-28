@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import { AccountActions } from './AccountActions';
 
 type Deal = {
   id: string;
@@ -63,9 +64,12 @@ export default function HomePage() {
   return (
     <main className="page">
       <section className="card hero-card">
+        <div className="section-heading">
+          <p className="eyebrow">Amanat Deal · пилот</p>
+          <AccountActions />
+        </div>
         <div className="hero-layout">
           <div>
-            <p className="eyebrow">Amanat Deal · пилот</p>
             <h1>Безопасная сделка с понятными правилами</h1>
             <p className="lead">
               Создайте защищённую сделку или присоединитесь к уже созданной по ссылке либо короткому коду. Роль второй стороны определяется автоматически.
