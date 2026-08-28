@@ -73,16 +73,32 @@ enum SettlementType {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  phone     String?  @unique
-  email     String?  @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  phone        String?  @unique
+  email        String?  @unique
+  name         String?
+  passwordHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  sellerDeals Deal[] @relation("SellerDeals")
-  buyerDeals  Deal[] @relation("BuyerDeals")
+  sellerDeals Deal[]        @relation("SellerDeals")
+  buyerDeals  Deal[]        @relation("BuyerDeals")
   events      DealEvent[]
+  sessions    UserSession[]
+}
+
+model UserSession {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
 }
 
 model Deal {
