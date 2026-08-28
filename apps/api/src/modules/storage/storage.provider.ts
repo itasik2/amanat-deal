@@ -20,4 +20,5 @@ export interface StorageProvider {
   read(key: string): Promise<Buffer>;
   prepareDirectUpload?(dealId: string, originalName: string): Promise<DirectUploadPlan>;
   verifyDirectUpload?(dealId: string, key: string): Promise<StoredObject>;
+  temporaryReadUrl?(key: string, expiresInSeconds?: number): Promise<string>;
 }
