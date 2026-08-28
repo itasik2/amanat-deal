@@ -17,7 +17,8 @@ async function proxy(request: Request, context: RouteContext) {
   const init: RequestInit = {
     method: request.method,
     headers,
-    cache: 'no-store'
+    cache: 'no-store',
+    redirect: 'manual'
   };
 
   if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -26,6 +27,22 @@ async function proxy(request: Request, context: RouteContext) {
 
   try {
     const upstream = await fetch(targetUrl, init);
+
+    if (upstream.status >= 300 && upstream.status < 400) {
+      const location = upstream.headers.get('location');
+      if (!location) {
+        return Response.json(
+          { statusCode: 502, message: 'Backend API вернул redirect без Location' },
+          { status: 502 }
+        );
+      }
+
+      return new Response(null, {
+        status: upstream.status,
+        headers: { location }
+      });
+    }
+
     const responseHeaders = new Headers();
     const upstreamContentType = upstream.headers.get('content-type');
     const disposition = upstream.headers.get('content-disposition');
