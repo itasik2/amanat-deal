@@ -127,6 +127,11 @@ export class EvidenceService {
     });
     if (!evidence) throw new NotFoundException('Evidence not found');
 
+    if (this.storage.temporaryReadUrl) {
+      const url = await this.storage.temporaryReadUrl(evidence.storageUrl, 300);
+      return { evidence, url };
+    }
+
     const buffer = await this.storage.read(evidence.storageUrl);
     return { evidence, buffer };
   }
