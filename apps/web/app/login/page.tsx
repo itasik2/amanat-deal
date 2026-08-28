@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 type AuthResponse = {
   user?: {
@@ -34,7 +34,6 @@ async function readResponse(response: Response) {
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,8 +58,7 @@ export default function LoginPage() {
       });
 
       await readResponse(response);
-      const next = searchParams.get('next');
-      router.replace(next && next.startsWith('/') ? next : '/');
+      router.replace('/');
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось выполнить вход');
