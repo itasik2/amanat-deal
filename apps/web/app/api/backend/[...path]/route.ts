@@ -12,7 +12,9 @@ async function proxy(request: Request, context: RouteContext) {
 
   const headers = new Headers();
   const contentType = request.headers.get('content-type');
+  const cookie = request.headers.get('cookie');
   if (contentType) headers.set('content-type', contentType);
+  if (cookie) headers.set('cookie', cookie);
 
   const init: RequestInit = {
     method: request.method,
@@ -27,6 +29,7 @@ async function proxy(request: Request, context: RouteContext) {
 
   try {
     const upstream = await fetch(targetUrl, init);
+    const setCookie = upstream.headers.get('set-cookie');
 
     if (upstream.status >= 300 && upstream.status < 400) {
       const location = upstream.headers.get('location');
@@ -37,9 +40,11 @@ async function proxy(request: Request, context: RouteContext) {
         );
       }
 
+      const redirectHeaders = new Headers({ location });
+      if (setCookie) redirectHeaders.set('set-cookie', setCookie);
       return new Response(null, {
         status: upstream.status,
-        headers: { location }
+        headers: redirectHeaders
       });
     }
 
@@ -50,6 +55,7 @@ async function proxy(request: Request, context: RouteContext) {
     if (upstreamContentType) responseHeaders.set('content-type', upstreamContentType);
     if (disposition) responseHeaders.set('content-disposition', disposition);
     if (sha256) responseHeaders.set('x-evidence-sha256', sha256);
+    if (setCookie) responseHeaders.set('set-cookie', setCookie);
 
     const body = await upstream.arrayBuffer();
 
