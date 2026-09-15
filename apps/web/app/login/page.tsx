@@ -4,21 +4,23 @@ import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-type AuthResponse = {
+type ApiResponse = {
   user?: {
     id: string;
-    email: string | null;
+    phone: string | null;
     name: string | null;
   };
+  phone?: string;
+  debugCode?: string;
   message?: string | string[];
 };
 
 async function readResponse(response: Response) {
   const text = await response.text();
-  let body: AuthResponse = {};
+  let body: ApiResponse = {};
   if (text.trim()) {
     try {
-      body = JSON.parse(text) as AuthResponse;
+      body = JSON.parse(text) as ApiResponse;
     } catch {
       body = { message: text.slice(0, 300) };
     }
@@ -34,34 +36,54 @@ async function readResponse(response: Response) {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [step, setStep] = useState<'phone' | 'code'>('phone');
+  const [maskedPhone, setMaskedPhone] = useState('');
+  const [debugCode, setDebugCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  async function requestCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError('');
-
     try {
-      const response = await fetch(`/api/backend/auth/${mode === 'login' ? 'login' : 'register'}`, {
+      const response = await fetch('/api/backend/auth/phone/request-code', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          password,
-          ...(mode === 'register' && name.trim() ? { name: name.trim() } : {})
-        })
+        body: JSON.stringify({ phone })
       });
+      const body = await readResponse(response);
+      setMaskedPhone(body.phone || phone);
+      setDebugCode(body.debugCode || '');
+      setStep('code');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось отправить код');
+    } finally {
+      setBusy(false);
+    }
+  }
 
+  async function verifyCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch('/api/backend/auth/phone/verify', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ phone, code, ...(name.trim() ? { name: name.trim() } : {}) })
+      });
       await readResponse(response);
-      router.replace('/');
+      const next = typeof window === 'undefined'
+        ? '/'
+        : new URLSearchParams(window.location.search).get('next') || '/';
+      router.replace(next.startsWith('/') ? next : '/');
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось выполнить вход');
+      setError(err instanceof Error ? err.message : 'Не удалось подтвердить номер');
     } finally {
       setBusy(false);
     }
@@ -70,35 +92,52 @@ export default function LoginPage() {
   return (
     <main className="page">
       <section className="card" style={{ maxWidth: 620, margin: '48px auto 0' }}>
-        <p className="eyebrow">Amanat Deal · аккаунт</p>
-        <h1>{mode === 'login' ? 'Вход' : 'Создание аккаунта'}</h1>
+        <p className="eyebrow">Amanat Deal · вход</p>
+        <h1>{step === 'phone' ? 'Войти по номеру телефона' : 'Подтвердить номер'}</h1>
         <p className="lead">
-          Аккаунт нужен, чтобы роль продавца или покупателя принадлежала конкретному участнику, а не переключателю в интерфейсе.
+          Один номер — один аккаунт. Роль покупателя или продавца определяется отдельно в каждой сделке.
         </p>
-
-        <div className="actions spacing-top-small">
-          <button
-            type="button"
-            className={mode === 'login' ? 'button' : 'button secondary'}
-            onClick={() => { setMode('login'); setError(''); }}
-          >
-            Войти
-          </button>
-          <button
-            type="button"
-            className={mode === 'register' ? 'button' : 'button secondary'}
-            onClick={() => { setMode('register'); setError(''); }}
-          >
-            Регистрация
-          </button>
-        </div>
 
         {error ? <div className="notice error spacing-top-small">{error}</div> : null}
 
-        <form className="form spacing-top" onSubmit={submit}>
-          {mode === 'register' ? (
+        {step === 'phone' ? (
+          <form className="form spacing-top" onSubmit={requestCode}>
             <label className="field">
-              <span>Имя</span>
+              <span>Номер телефона</span>
+              <input
+                type="tel"
+                autoComplete="tel"
+                required
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="+7 747 123 45 67"
+              />
+            </label>
+            <button className="button" type="submit" disabled={busy}>
+              {busy ? 'Отправляем…' : 'Получить SMS-код'}
+            </button>
+          </form>
+        ) : (
+          <form className="form spacing-top" onSubmit={verifyCode}>
+            <div className="notice">Код отправлен на {maskedPhone}.</div>
+            {debugCode ? (
+              <div className="notice warning">Пилотный режим: код {debugCode}</div>
+            ) : null}
+            <label className="field">
+              <span>Код из SMS</span>
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                required
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+              />
+            </label>
+            <label className="field">
+              <span>Имя <span className="muted">(необязательно)</span></span>
               <input
                 autoComplete="name"
                 value={name}
@@ -106,37 +145,21 @@ export default function LoginPage() {
                 placeholder="Как к вам обращаться"
               />
             </label>
-          ) : null}
-
-          <label className="field">
-            <span>Email</span>
-            <input
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="name@example.com"
-            />
-          </label>
-
-          <label className="field">
-            <span>Пароль</span>
-            <input
-              type="password"
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              minLength={8}
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Не менее 8 символов"
-            />
-          </label>
-
-          <button className="button" type="submit" disabled={busy}>
-            {busy ? 'Подождите…' : mode === 'login' ? 'Войти' : 'Создать аккаунт'}
-          </button>
-        </form>
+            <div className="actions">
+              <button className="button" type="submit" disabled={busy || code.length !== 6}>
+                {busy ? 'Проверяем…' : 'Войти'}
+              </button>
+              <button
+                className="button secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => { setStep('phone'); setCode(''); setDebugCode(''); setError(''); }}
+              >
+                Изменить номер
+              </button>
+            </div>
+          </form>
+        )}
 
         <div className="spacing-top-small">
           <Link className="text-button" href="/">← На главную</Link>
