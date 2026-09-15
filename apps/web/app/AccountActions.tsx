@@ -41,6 +41,7 @@ export function AccountActions() {
   async function logout() {
     await fetch('/api/backend/auth/logout', { method: 'POST' }).catch(() => null);
     setUser(null);
+    window.location.href = '/';
   }
 
   if (loading) return <span className="muted small">Аккаунт…</span>;
@@ -51,7 +52,7 @@ export function AccountActions() {
 
   return (
     <div className="actions">
-      <span className="muted small">{user.name || user.email || 'Участник'}</span>
+      <span className="muted small">{user.name || user.phone || user.email || 'Участник'}</span>
       <button className="text-button" type="button" onClick={() => void logout()}>Выйти</button>
     </div>
   );

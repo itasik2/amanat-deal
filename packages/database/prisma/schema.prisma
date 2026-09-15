@@ -81,10 +81,11 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  sellerDeals Deal[]        @relation("SellerDeals")
-  buyerDeals  Deal[]        @relation("BuyerDeals")
-  events      DealEvent[]
-  sessions    UserSession[]
+  sellerDeals        Deal[]           @relation("SellerDeals")
+  buyerDeals         Deal[]           @relation("BuyerDeals")
+  events             DealEvent[]
+  sessions           UserSession[]
+  claimedInvitations DealInvitation[] @relation("ClaimedInvitations")
 }
 
 model UserSession {
@@ -99,6 +100,20 @@ model UserSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
+}
+
+model PhoneOtpChallenge {
+  id         String    @id @default(cuid())
+  phone      String    @unique
+  codeHash   String
+  expiresAt  DateTime
+  sentAt     DateTime  @default(now())
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([expiresAt])
 }
 
 model Deal {
@@ -138,21 +153,26 @@ model Deal {
 }
 
 model DealInvitation {
-  id          String    @id @default(cuid())
-  dealId      String
-  invitedRole PartyRole
-  tokenHash   String    @unique
-  shortCode   String    @unique
-  expiresAt   DateTime
-  claimedAt   DateTime?
-  revokedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  dealId          String
+  invitedRole     PartyRole
+  recipientPhone  String?
+  tokenHash       String    @unique
+  shortCode       String    @unique
+  expiresAt       DateTime
+  claimedAt       DateTime?
+  claimedByUserId String?
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  deal      Deal  @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  claimedBy User? @relation("ClaimedInvitations", fields: [claimedByUserId], references: [id])
 
   @@index([dealId, createdAt])
   @@index([shortCode, expiresAt])
+  @@index([recipientPhone, expiresAt])
+  @@index([claimedByUserId])
 }
 
 model DealTerm {

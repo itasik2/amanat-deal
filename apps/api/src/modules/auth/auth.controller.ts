@@ -1,11 +1,36 @@
 import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService, SESSION_COOKIE_NAME } from './auth.service';
+import { PhoneAuthService } from './phone-auth.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly phoneAuth: PhoneAuthService
+  ) {}
 
+  @Post('phone/request-code')
+  requestPhoneCode(@Body() body: { phone?: string }) {
+    return this.phoneAuth.requestCode(body);
+  }
+
+  @Post('phone/verify')
+  async verifyPhone(
+    @Body() body: { phone?: string; code?: string; name?: string },
+    @Res({ passthrough: true }) response: Response
+  ) {
+    const session = await this.phoneAuth.verifyCode(body);
+    response.cookie(
+      SESSION_COOKIE_NAME,
+      session.sessionToken,
+      this.auth.sessionCookieOptions(session.expiresAt)
+    );
+    return { user: session.user, expiresAt: session.expiresAt };
+  }
+
+  // Legacy pilot email/password endpoints remain available while existing
+  // test accounts are migrated to phone-first authentication.
   @Post('register')
   async register(
     @Body() body: { email?: string; password?: string; name?: string },
