@@ -23,6 +23,10 @@ export class CreateDealDto {
   creatorRole!: PartyRoleDto;
 
   @IsString()
+  @MinLength(10)
+  counterpartyPhone!: string;
+
+  @IsString()
   @MinLength(3)
   title!: string;
 
