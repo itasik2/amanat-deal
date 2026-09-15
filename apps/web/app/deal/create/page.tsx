@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
 type DealCategory = 'GOODS' | 'SERVICE' | 'REPAIR' | 'EQUIPMENT' | 'OTHER';
 type ProtectionPlan = 'BASIC' | 'EXTENDED';
@@ -51,6 +51,13 @@ export default function CreateDealPage() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteMessage, setInviteMessage] = useState('');
 
+  useEffect(() => {
+    const requestedRole = new URLSearchParams(window.location.search).get('role');
+    if (requestedRole === 'BUYER' || requestedRole === 'SELLER') {
+      setCreatorRole(requestedRole);
+    }
+  }, []);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -73,8 +80,8 @@ export default function CreateDealPage() {
       });
 
       if (response.status === 401 || response.status === 403) {
-        const next = encodeURIComponent('/deal/create');
-        window.location.href = `/login?next=${next}`;
+        const nextPath = `${window.location.pathname}${window.location.search}`;
+        window.location.href = `/login?next=${encodeURIComponent(nextPath)}`;
         return;
       }
       if (!response.ok) throw new Error(await parseApiError(response));
