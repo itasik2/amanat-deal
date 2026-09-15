@@ -1,7 +1,8 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
-  TooManyRequestsException,
   UnauthorizedException
 } from '@nestjs/common';
 import { createHash, createHmac, randomBytes, randomInt } from 'node:crypto';
@@ -18,7 +19,7 @@ export class PhoneAuthService {
     const existing = await this.prisma.phoneOtpChallenge.findUnique({ where: { phone } });
 
     if (existing && existing.sentAt.getTime() > now.getTime() - 60_000) {
-      throw new TooManyRequestsException('Повторный код можно запросить через минуту');
+      throw new HttpException('Повторный код можно запросить через минуту', HttpStatus.TOO_MANY_REQUESTS);
     }
 
     const code = String(randomInt(100000, 1000000));
