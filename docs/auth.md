@@ -2,22 +2,42 @@
 
 ## Current pilot model
 
-- Email + password registration/login.
-- Passwords are stored only as `scrypt` hashes with a random salt.
+The primary account identifier is a Kazakhstan phone number. The account itself has no permanent buyer/seller role; the role is assigned per deal.
+
+- User enters a phone number and requests a six-digit OTP.
+- OTP challenges are hashed, expire after a short TTL and allow a limited number of attempts.
+- Successful OTP verification finds or creates the `User` bound to that phone.
 - Browser session uses an opaque random token in an `HttpOnly` cookie named `amanat_session`.
 - Only SHA-256 of the session token is stored in PostgreSQL.
 - Session lifetime defaults to 30 days and can be configured with `AUTH_SESSION_TTL_DAYS`.
 - Logout revokes the server-side session and clears the cookie.
+- Legacy email/password endpoints remain temporarily available for existing pilot test accounts.
 
-## API
+## Phone OTP API
 
-- `POST /api/v1/auth/register` `{ email, password, name? }`
-- `POST /api/v1/auth/login` `{ email, password }`
+- `POST /api/v1/auth/phone/request-code` `{ phone }`
+- `POST /api/v1/auth/phone/verify` `{ phone, code, name? }`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/logout`
 
+The pilot can expose the generated OTP only when `OTP_DEBUG_CODE_ENABLED=true`. This is for local/test use. Production must set `OTP_DEBUG_CODE_ENABLED=false`, configure `OTP_HASH_SECRET`, and connect a real SMS transport.
+
+## Legacy pilot API
+
+- `POST /api/v1/auth/register` `{ email, password, name? }`
+- `POST /api/v1/auth/login` `{ email, password }`
+
+Passwords for legacy accounts are stored only as `scrypt` hashes with a random salt.
+
+## Deal identity and invitations
+
+- Creating a new deal requires an authenticated phone account.
+- The creator is bound to `Deal.sellerId` or `Deal.buyerId` according to the role chosen for that deal.
+- The invitation is addressed to one normalized `recipientPhone`.
+- Public invitation preview reveals only the deal public code, invited role, expiry and a masked recipient phone.
+- Full deal terms and invitation claim require an authenticated session whose verified phone equals `recipientPhone`.
+- Claim records `claimedByUserId` and binds the counterparty to the remaining `sellerId` / `buyerId` slot.
+- Before claim, the creator can revoke the invitation or replace an incorrect phone. Reissue revokes the previous token and short code.
+- After claim, the counterparty cannot be silently replaced.
+
 The Next.js backend proxy forwards the auth cookie between the public web app and the NestJS API. No session token is stored in browser JavaScript or localStorage.
-
-## Next step
-
-Bind authenticated users to `Deal.sellerId` / `Deal.buyerId` when creating and claiming a deal invitation, then derive all participant permissions server-side instead of trusting UI-selected roles.
