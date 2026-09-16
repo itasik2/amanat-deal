@@ -183,61 +183,45 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="pilot-strip">
-          <strong>Пилотный режим</strong>
-          <span>Регистрация, приглашения и сценарий сделки уже работают. Реальные деньги пока не принимаются: платёжный этап моделируется до подключения юридически и технически подходящего платёжного партнёра.</span>
-        </section>
-
-        <section className="home-section home-deals-section">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Аккаунт</p>
+        {authenticated ? (
+          <section className="home-section home-deals-section">
+            <div className="section-heading">
               <h2>Мои сделки</h2>
-            </div>
-            {authenticated ? (
               <div className="actions">
                 <span className="muted small">{deals.length} шт.</span>
                 <button className="text-button" onClick={() => void loadDeals()}>Обновить</button>
               </div>
+            </div>
+
+            {error ? <div className="notice error">{error}</div> : null}
+            {loading ? <div className="card">Загружаем сделки…</div> : null}
+
+            {!loading && deals.length === 0 ? (
+              <div className="card empty-state">
+                <h3>Сделок пока нет</h3>
+                <p className="muted">Выберите роль выше и создайте первую сделку.</p>
+                <a className="button secondary" href="#entry-home-title">К выбору роли</a>
+              </div>
             ) : null}
-          </div>
 
-          {error ? <div className="notice error">{error}</div> : null}
-          {loading ? <div className="card">Проверяем аккаунт…</div> : null}
-
-          {!loading && authenticated === false ? (
-            <div className="card empty-state">
-              <h3>Сделки появятся после входа</h3>
-              <p className="muted">Войдите по номеру телефона, чтобы видеть сделки, где вы покупатель или продавец.</p>
-              <Link className="button" href="/login">Войти по телефону</Link>
-            </div>
-          ) : null}
-
-          {!loading && authenticated && deals.length === 0 ? (
-            <div className="card empty-state">
-              <h3>Сделок пока нет</h3>
-              <p className="muted">Выберите роль выше и создайте первую сделку.</p>
-              <a className="button secondary" href="#entry-home-title">К выбору роли</a>
-            </div>
-          ) : null}
-
-          {authenticated && deals.length > 0 ? (
-            <div className="deal-list">
-              {deals.map((deal) => (
-                <Link className="deal-row" href={`/deal/${deal.id}`} key={deal.id}>
-                  <div>
-                    <strong>{deal.title}</strong>
-                    <p className="muted small">{deal.publicCode} · {protectionLabels[deal.protectionPlan] ?? deal.protectionPlan}</p>
-                  </div>
-                  <div className="deal-row-right">
-                    <strong>{money(deal.amountKzt)}</strong>
-                    <span className={`status status-${deal.status.toLowerCase()}`}>{statusLabels[deal.status] ?? deal.status}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : null}
-        </section>
+            {!loading && deals.length > 0 ? (
+              <div className="deal-list">
+                {deals.map((deal) => (
+                  <Link className="deal-row" href={`/deal/${deal.id}`} key={deal.id}>
+                    <div>
+                      <strong>{deal.title}</strong>
+                      <p className="muted small">{deal.publicCode} · {protectionLabels[deal.protectionPlan] ?? deal.protectionPlan}</p>
+                    </div>
+                    <div className="deal-row-right">
+                      <strong>{money(deal.amountKzt)}</strong>
+                      <span className={`status status-${deal.status.toLowerCase()}`}>{statusLabels[deal.status] ?? deal.status}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
       </div>
     </main>
   );
