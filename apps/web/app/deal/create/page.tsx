@@ -36,6 +36,7 @@ function roleLabel(role: PartyRole) {
 
 export default function CreateDealPage() {
   const [creatorRole, setCreatorRole] = useState<PartyRole>('SELLER');
+  const [authChecked, setAuthChecked] = useState(false);
   const [counterpartyPhone, setCounterpartyPhone] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -52,10 +53,25 @@ export default function CreateDealPage() {
   const [inviteMessage, setInviteMessage] = useState('');
 
   useEffect(() => {
-    const requestedRole = new URLSearchParams(window.location.search).get('role');
+    const params = new URLSearchParams(window.location.search);
+    const requestedRole = params.get('role');
     if (requestedRole === 'BUYER' || requestedRole === 'SELLER') {
       setCreatorRole(requestedRole);
     }
+
+    const nextPath = `${window.location.pathname}${window.location.search}`;
+    void fetch('/api/backend/auth/me', { cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) {
+          window.location.replace(`/login?next=${encodeURIComponent(nextPath)}`);
+          return;
+        }
+        setAuthChecked(true);
+      })
+      .catch(() => {
+        setError('Не удалось проверить вход. Обновите страницу и попробуйте ещё раз.');
+        setAuthChecked(true);
+      });
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -99,6 +115,21 @@ export default function CreateDealPage() {
     window.setTimeout(() => setCopied(''), 1800);
   }
 
+  async function shareInvite(inviteUrl: string) {
+    const shareText = `Amanat Deal: вас пригласили в сделку «${created?.title ?? ''}». Откройте ссылку и войдите по номеру телефона, на который оформлено приглашение.`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Приглашение в Amanat Deal', text: shareText, url: inviteUrl });
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+      }
+    }
+
+    await copy(`${shareText}\n${inviteUrl}`, 'share');
+  }
+
   async function reissueInvitation() {
     if (!created || !replacementPhone.trim()) return;
     setInviteBusy(true);
@@ -137,11 +168,32 @@ export default function CreateDealPage() {
     }
   }
 
+  if (!authChecked) {
+    return (
+      <main className="page narrow">
+        <section className="card" style={{ marginTop: 48 }}>
+          <p className="eyebrow">Amanat Deal</p>
+          <h1>Проверяем вход…</h1>
+          <p className="muted">Если аккаунт ещё не подтверждён, сейчас откроется вход по номеру телефона и SMS-коду.</p>
+        </section>
+      </main>
+    );
+  }
+
   if (created) {
     const inviteUrl = created.invitation
       ? (typeof window === 'undefined'
         ? `/invite/${created.invitation.token}`
         : `${window.location.origin}/invite/${created.invitation.token}`)
+      : '';
+    const shareText = created.invitation
+      ? `Amanat Deal: вас пригласили в сделку «${created.title}». Откройте ссылку и войдите по номеру телефона, на который оформлено приглашение.`
+      : '';
+    const whatsappUrl = created.invitation
+      ? `https://wa.me/?text=${encodeURIComponent(`${shareText}\n${inviteUrl}`)}`
+      : '';
+    const telegramUrl = created.invitation
+      ? `https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${encodeURIComponent(shareText)}`
       : '';
 
     return (
@@ -180,6 +232,14 @@ export default function CreateDealPage() {
                     {copied === 'code' ? 'Скопировано' : 'Скопировать код'}
                   </button>
                 </div>
+              </div>
+
+              <div className="actions spacing-top-small">
+                <a className="button" href={whatsappUrl} target="_blank" rel="noreferrer">WhatsApp</a>
+                <a className="button secondary" href={telegramUrl} target="_blank" rel="noreferrer">Telegram</a>
+                <button className="button secondary" type="button" onClick={() => void shareInvite(inviteUrl)}>
+                  {copied === 'share' ? 'Текст скопирован' : 'Поделиться'}
+                </button>
               </div>
 
               <p className="muted small spacing-top-small">
