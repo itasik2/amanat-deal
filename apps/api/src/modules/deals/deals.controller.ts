@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { PartyRole } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user';
 import type { PublicUser } from '../auth/auth.service';
@@ -7,6 +7,7 @@ import { SessionAuthGuard } from '../auth/session-auth.guard';
 import { DealAccessService } from './deal-access.service';
 import { CreateDealDto } from './dto/create-deal.dto';
 import { DealsService } from './deals.service';
+import { InspectionAutomationService } from './inspection-automation.service';
 import { SecureInvitationsService } from './secure-invitations.service';
 
 @Controller('deals')
@@ -15,7 +16,8 @@ export class DealsController {
     private readonly deals: DealsService,
     private readonly secureInvitations: SecureInvitationsService,
     private readonly phoneAuth: PhoneAuthService,
-    private readonly access: DealAccessService
+    private readonly access: DealAccessService,
+    private readonly inspections: InspectionAutomationService
   ) {}
 
   @Post()
@@ -42,7 +44,8 @@ export class DealsController {
 
   @Get()
   @UseGuards(SessionAuthGuard)
-  list(@CurrentUser() user: PublicUser) {
+  async list(@CurrentUser() user: PublicUser) {
+    await this.inspections.reconcileUser(user.id);
     return this.secureInvitations.listForUser(user);
   }
 
@@ -67,6 +70,7 @@ export class DealsController {
   @UseGuards(SessionAuthGuard)
   async get(@Param('id') id: string, @CurrentUser() user: PublicUser) {
     const currentUserRole = await this.access.roleForUser(id, user.id);
+    await this.inspections.reconcileDeal(id);
     const deal = await this.deals.get(id);
     return { ...deal, currentUserRole };
   }
@@ -123,6 +127,7 @@ export class DealsController {
   @UseGuards(SessionAuthGuard)
   async confirmReceipt(@Param('id') id: string, @CurrentUser() user: PublicUser) {
     await this.access.requireRole(id, user.id, PartyRole.BUYER);
+    if (await this.inspections.reconcileDeal(id)) return this.deals.get(id);
     return this.deals.complete(id, 'buyer_confirmed');
   }
 
@@ -134,6 +139,9 @@ export class DealsController {
     @CurrentUser() user: PublicUser
   ) {
     await this.access.roleForUser(id, user.id);
+    if (await this.inspections.reconcileDeal(id)) {
+      throw new BadRequestException('Срок проверки уже истёк; сделка завершена автоматически');
+    }
     return this.deals.reportProblem(id, body.reason);
   }
 
@@ -141,6 +149,7 @@ export class DealsController {
   @UseGuards(SessionAuthGuard)
   async events(@Param('id') id: string, @CurrentUser() user: PublicUser) {
     await this.access.roleForUser(id, user.id);
+    await this.inspections.reconcileDeal(id);
     return this.deals.events(id);
   }
 }
