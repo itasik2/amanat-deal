@@ -43,14 +43,14 @@ export class PhoneAuthService {
     });
 
     // Pilot transport. A real SMS provider can replace this without changing
-    // the OTP/session contract. Do not enable OTP_DEBUG_CODE_ENABLED in production.
-    console.info(`[amanat-otp] ${phone}: ${code}`);
+    // the OTP/session contract. Raw OTP values are never written to server logs.
+    const debugCodeEnabled = process.env.OTP_DEBUG_CODE_ENABLED === 'true';
 
     return {
       ok: true,
       phone: this.maskPhone(phone),
       expiresAt,
-      ...(process.env.OTP_DEBUG_CODE_ENABLED === 'true' ? { debugCode: code } : {})
+      ...(debugCodeEnabled ? { debugCode: code } : {})
     };
   }
 
