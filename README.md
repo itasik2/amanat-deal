@@ -13,7 +13,7 @@ The platform is not a court, not an insurer and not a bookmaker. It fixes terms,
 - Phone-bound counterparty invitations and per-deal buyer/seller roles.
 - Server-side participant authorization for deal actions, evidence and disputes.
 - Mock escrow instead of real money.
-- Deal state machine.
+- Deal state machine with automatic inspection-timeout completion.
 - PostgreSQL/Prisma persistence.
 - Evidence uploads, SHA-256 audit data and protection checklists.
 - Dispute messages, settlement proposals and optional assistance requests.
@@ -59,8 +59,8 @@ Services:
 4. Buyer runs the mock funding step.
 5. Seller adds required evidence and shipment data.
 6. Buyer confirms delivery and the inspection period starts.
-7. Buyer confirms receipt or either participant reports a problem.
-8. Deal completes or moves to the dispute/legal flow.
+7. Buyer confirms receipt, reports a problem before the deadline, or the inspection window expires.
+8. On timeout the system completes the deal and releases the mock escrow status automatically; an active problem stops that path.
 
 ## Important warning
 
