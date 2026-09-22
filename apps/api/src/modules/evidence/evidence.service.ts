@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { DealRole } from '@prisma/client';
+import { DealRole, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_PROVIDER, StorageProvider } from '../storage/storage.provider';
 import { buildProtectionChecklist } from './protection-checklist';
@@ -16,6 +16,18 @@ export type EvidenceFinalizeInput = EvidenceUploadInput & {
   mimeType?: string;
 };
 
+const publicEvidenceSelect = {
+  id: true,
+  uploaderRole: true,
+  kind: true,
+  fileName: true,
+  mimeType: true,
+  sizeBytes: true,
+  sha256: true,
+  note: true,
+  createdAt: true
+} satisfies Prisma.EvidenceFileSelect;
+
 @Injectable()
 export class EvidenceService {
   constructor(
@@ -27,7 +39,8 @@ export class EvidenceService {
     await this.ensureDeal(dealId);
     return this.prisma.evidenceFile.findMany({
       where: { dealId },
-      orderBy: { createdAt: 'asc' }
+      orderBy: { createdAt: 'asc' },
+      select: publicEvidenceSelect
     });
   }
 
@@ -75,7 +88,8 @@ export class EvidenceService {
     if (!fileName) throw new BadRequestException('Original file name is required');
 
     const existing = await this.prisma.evidenceFile.findFirst({
-      where: { dealId, storageUrl: key }
+      where: { dealId, storageUrl: key },
+      select: publicEvidenceSelect
     });
     if (existing) return existing;
 
@@ -157,7 +171,8 @@ export class EvidenceService {
           storageUrl: input.stored.key,
           sha256: input.stored.sha256,
           note: input.note
-        }
+        },
+        select: publicEvidenceSelect
       });
 
       await tx.dealEvent.create({
