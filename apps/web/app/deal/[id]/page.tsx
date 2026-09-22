@@ -252,7 +252,7 @@ export default function DealPage() {
           return (
             <>
               <p className="muted">Это старая пилотная сделка. Покупатель может принять условия по прежнему сценарию.</p>
-              <button className="button" disabled={acting} onClick={() => void post('accept', { actorRole: 'BUYER' })}>Принять условия</button>
+              <button className="button" disabled={acting} onClick={() => void post('accept')}>Принять условия</button>
             </>
           );
         }
@@ -264,7 +264,7 @@ export default function DealPage() {
         return (
           <>
             <p className="muted">Вы присоединились как вторая сторона. Проверьте условия и подтвердите их, чтобы сделка перешла к оплате.</p>
-            <button className="button" disabled={acting} onClick={() => void post('accept', { actorRole: activeRole })}>Принять условия</button>
+            <button className="button" disabled={acting} onClick={() => void post('accept')}>Принять условия</button>
           </>
         );
       }
