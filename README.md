@@ -9,13 +9,17 @@ The platform is not a court, not an insurer and not a bookmaker. It fixes terms,
 ## Current MVP scope
 
 - Universal protected deal category model.
+- Phone/OTP accounts with server sessions.
+- Phone-bound counterparty invitations and per-deal buyer/seller roles.
+- Server-side participant authorization for deal actions, evidence and disputes.
 - Mock escrow instead of real money.
 - Deal state machine.
 - PostgreSQL/Prisma persistence.
+- Evidence uploads, SHA-256 audit data and protection checklists.
+- Dispute messages, settlement proposals and optional assistance requests.
 - API-first backend.
 - Web/PWA shell.
 - Admin shell.
-- Evidence and legal docs planned as separate milestones.
 
 ## Monorepo layout
 
@@ -49,14 +53,14 @@ Services:
 
 ## First pilot path
 
-1. Seller creates a deal.
-2. Buyer accepts the deal.
-3. Mock escrow marks funds as secured.
-4. Seller adds shipment data.
-5. Delivery is marked as delivered.
-6. Inspection period starts.
-7. Buyer confirms receipt or reports a problem.
-8. Deal completes or moves to problem/legal flow.
+1. User signs in by phone/OTP and creates a deal as buyer or seller.
+2. The creator invites the counterparty by their phone number.
+3. The invited account claims the invitation and both server-side roles are fixed.
+4. Buyer runs the mock funding step.
+5. Seller adds required evidence and shipment data.
+6. Buyer confirms delivery and the inspection period starts.
+7. Buyer confirms receipt or either participant reports a problem.
+8. Deal completes or moves to the dispute/legal flow.
 
 ## Important warning
 
