@@ -77,6 +77,11 @@ const protectionLabels: Record<string, string> = {
   EXTENDED: 'Расширенная защита'
 };
 
+const paymentStatusLabels: Record<string, string> = {
+  FUNDS_SECURED: 'Средства зарезервированы',
+  RELEASED: 'Выплачено продавцу'
+};
+
 const eventLabels: Record<string, string> = {
   'deal.created': 'Сделка создана',
   'deal.invitation_created': 'Создано приглашение второй стороне',
@@ -89,6 +94,7 @@ const eventLabels: Record<string, string> = {
   'shipment.added': 'Добавлена отправка',
   'delivery.delivered': 'Доставка подтверждена',
   'inspection.started': 'Начался срок проверки',
+  'inspection.expired': 'Срок проверки истёк, сделка завершена автоматически',
   'mock_escrow.release_to_seller': 'Mock-выплата продавцу',
   'problem.reported': 'Зафиксирована проблема',
   'evidence.uploaded': 'Добавлено доказательство',
@@ -386,7 +392,7 @@ export default function DealPage() {
           <p className="eyebrow">Общее состояние</p>
           <h2>Расчёты и доставка</h2>
           <dl className="facts">
-            <div><dt>Mock-escrow</dt><dd>{payment ? payment.status : 'Нет платежа'}</dd></div>
+            <div><dt>Mock-escrow</dt><dd>{payment ? paymentStatusLabels[payment.status] ?? payment.status : 'Нет платежа'}</dd></div>
             <div><dt>Резервирование</dt><dd>{dateTime(deal.fundsSecuredAt)}</dd></div>
             <div><dt>Перевозчик</dt><dd>{delivery?.carrier || '—'}</dd></div>
             <div><dt>Трек-номер</dt><dd>{delivery?.trackingNumber || '—'}</dd></div>

@@ -331,7 +331,13 @@ export class DealsService {
       await this.assertProtectionEvidence(id, 'RECEIPT');
     }
     return this.transition(id, DealStatus.COMPLETED, 'mock_escrow.release_to_seller', { reason }, {
-      completedAt: new Date()
+      completedAt: new Date(),
+      payments: {
+        updateMany: {
+          where: { status: 'FUNDS_SECURED' },
+          data: { status: 'RELEASED' }
+        }
+      }
     });
   }
 

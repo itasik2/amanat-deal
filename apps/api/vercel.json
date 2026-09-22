@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/v1/internal/automation/inspection-expirations",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}
