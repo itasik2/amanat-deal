@@ -1,22 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
-import { DealRole, DealStatus, PartyRole, Prisma } from '@prisma/client';
+import { DealRole, DealStatus, PartyRole } from '@prisma/client';
 import type { PublicUser } from '../auth/auth.service';
 import { PhoneAuthService } from '../auth/phone-auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const SHORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-const secureDealInclude = {
-  payments: true,
-  deliveries: true,
-  evidence: true,
-  disputeAssistance: true,
-  invitations: {
-    orderBy: { createdAt: 'desc' as const },
-    take: 1
-  }
-} satisfies Prisma.DealInclude;
 
 @Injectable()
 export class SecureInvitationsService {
@@ -108,7 +97,16 @@ export class SecureInvitationsService {
         OR: [{ sellerId: user.id }, { buyerId: user.id }]
       },
       orderBy: { createdAt: 'desc' },
-      include: secureDealInclude
+      select: {
+        id: true,
+        publicCode: true,
+        title: true,
+        amountKzt: true,
+        platformFeeKzt: true,
+        protectionPlan: true,
+        status: true,
+        createdAt: true
+      }
     });
   }
 
@@ -293,7 +291,13 @@ export class SecureInvitationsService {
 
       const deal = await tx.deal.findUnique({
         where: { id: invitation.dealId },
-        include: secureDealInclude
+        select: {
+          id: true,
+          publicCode: true,
+          title: true,
+          status: true,
+          creatorRole: true
+        }
       });
       if (!deal) throw new NotFoundException('Сделка не найдена');
 

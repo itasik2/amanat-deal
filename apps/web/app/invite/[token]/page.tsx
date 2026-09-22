@@ -90,7 +90,7 @@ export default function InvitePage() {
       const response = await fetch(`/api/backend/deal-invitations/${encodeURIComponent(token)}/claim`, { method: 'POST' });
       if (!response.ok) throw new Error(await apiError(response));
       const result = await response.json() as { role: PartyRole; deal: { id: string } };
-      router.push(`/deal/${result.deal.id}?role=${result.role}`);
+      router.push(`/deal/${result.deal.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось присоединиться');
     } finally {

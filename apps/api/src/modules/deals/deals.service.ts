@@ -16,13 +16,27 @@ import { missingRequiredEvidence, ProtectionStage } from '../evidence/protection
 import { PrismaService } from '../prisma/prisma.service';
 
 const dealInclude = {
-  payments: true,
-  deliveries: true,
-  evidence: true,
-  disputeAssistance: true,
-  invitations: {
-    orderBy: { createdAt: 'desc' as const },
-    take: 1
+  payments: {
+    select: {
+      id: true,
+      provider: true,
+      amountKzt: true,
+      platformFeeKzt: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  },
+  deliveries: {
+    select: {
+      id: true,
+      carrier: true,
+      trackingNumber: true,
+      status: true,
+      deliveredAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
   }
 } satisfies Prisma.DealInclude;
 

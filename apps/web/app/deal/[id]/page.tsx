@@ -150,6 +150,10 @@ export default function DealPage() {
         fetch(`/api/backend/deals/${id}/events`, { cache: 'no-store' })
       ]);
 
+      if (dealResponse.status === 401 || eventsResponse.status === 401) {
+        window.location.replace(`/login?next=${encodeURIComponent(`/deal/${id}`)}`);
+        return;
+      }
       if (!dealResponse.ok) throw new Error(await apiError(dealResponse));
       if (!eventsResponse.ok) throw new Error(await apiError(eventsResponse));
 
