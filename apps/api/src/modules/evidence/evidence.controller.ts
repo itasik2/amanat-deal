@@ -6,51 +6,76 @@ import {
   Post,
   Res,
   UploadedFile,
+  UseGuards,
   UseInterceptors
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { CurrentUser } from '../auth/current-user';
+import type { PublicUser } from '../auth/auth.service';
+import { SessionAuthGuard } from '../auth/session-auth.guard';
+import { DealAccessService } from '../deals/deal-access.service';
 import { EvidenceFinalizeInput, EvidenceService, EvidenceUploadInput } from './evidence.service';
 
 @Controller('deals')
+@UseGuards(SessionAuthGuard)
 export class EvidenceController {
-  constructor(private readonly evidence: EvidenceService) {}
+  constructor(
+    private readonly evidence: EvidenceService,
+    private readonly access: DealAccessService
+  ) {}
 
   @Get(':id/evidence')
-  list(@Param('id') id: string) {
+  async list(@Param('id') id: string, @CurrentUser() user: PublicUser) {
+    await this.access.roleForUser(id, user.id);
     return this.evidence.list(id);
   }
 
   @Get(':id/protection-checklist')
-  checklist(@Param('id') id: string) {
+  async checklist(@Param('id') id: string, @CurrentUser() user: PublicUser) {
+    await this.access.roleForUser(id, user.id);
     return this.evidence.checklist(id);
   }
 
   @Post(':id/evidence/prepare-upload')
-  prepareUpload(@Param('id') id: string, @Body() body: { fileName?: string }) {
+  async prepareUpload(
+    @Param('id') id: string,
+    @Body() body: { fileName?: string },
+    @CurrentUser() user: PublicUser
+  ) {
+    await this.access.roleForUser(id, user.id);
     return this.evidence.prepareUpload(id, body.fileName);
   }
 
   @Post(':id/evidence/finalize-upload')
-  finalizeUpload(@Param('id') id: string, @Body() body: EvidenceFinalizeInput) {
-    return this.evidence.finalizeUpload(id, body);
+  async finalizeUpload(
+    @Param('id') id: string,
+    @Body() body: EvidenceFinalizeInput,
+    @CurrentUser() user: PublicUser
+  ) {
+    const role = await this.access.roleForUser(id, user.id);
+    return this.evidence.finalizeUpload(id, { ...body, uploaderRole: role });
   }
 
   @Post(':id/evidence')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024 } }))
-  upload(
+  async upload(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File | undefined,
-    @Body() body: EvidenceUploadInput
+    @Body() body: EvidenceUploadInput,
+    @CurrentUser() user: PublicUser
   ) {
-    return this.evidence.upload(id, file, body);
+    const role = await this.access.roleForUser(id, user.id);
+    return this.evidence.upload(id, file, { ...body, uploaderRole: role });
   }
 
   @Get(':id/evidence/:evidenceId/file')
   async file(
     @Param('id') id: string,
     @Param('evidenceId') evidenceId: string,
+    @CurrentUser() user: PublicUser,
     @Res() response: any
   ) {
+    await this.access.roleForUser(id, user.id);
     const access = await this.evidence.read(id, evidenceId);
 
     if ('url' in access) {
