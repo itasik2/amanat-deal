@@ -6,6 +6,8 @@ Base path: `/api/v1`.
 
 Private deal endpoints require an active `amanat_session` created by phone/OTP authentication.
 
+The API uses a global NestJS `ValidationPipe` with whitelisting and rejection of undeclared DTO fields. Browser CORS is restricted to the configured `WEB_APP_URL` and `ADMIN_APP_URL` origins instead of reflecting arbitrary origins.
+
 - Deal access is resolved from `sellerId` / `buyerId` on the server.
 - Buyer/seller role is never trusted from the browser for protected actions.
 - Buyer-only actions include mock funding, delivery confirmation and receipt confirmation.
