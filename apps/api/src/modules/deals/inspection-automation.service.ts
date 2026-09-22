@@ -27,7 +27,7 @@ export class InspectionAutomationService {
       take: limit
     });
 
-    return this.processCandidates(candidates, now);
+    return this.processCandidates(candidates, now, limit);
   }
 
   async completeExpiredInspections(now = new Date(), limit = 100) {
@@ -41,10 +41,10 @@ export class InspectionAutomationService {
       take: limit
     });
 
-    return this.processCandidates(candidates, now);
+    return this.processCandidates(candidates, now, limit);
   }
 
-  private async processCandidates(candidates: DueInspection[], now: Date) {
+  private async processCandidates(candidates: DueInspection[], now: Date, limit: number) {
     let completed = 0;
     let skipped = 0;
     let failed = 0;
@@ -68,7 +68,7 @@ export class InspectionAutomationService {
       skipped,
       failed,
       processedAt: now.toISOString(),
-      hasMore: candidates.length >= 100
+      hasMore: candidates.length >= limit
     };
   }
 
