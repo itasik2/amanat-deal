@@ -144,7 +144,6 @@ export function DisputePanel({
     try {
       const proposal = mode === 'PROPOSAL' && !isAdmin;
       const payload: Record<string, unknown> = {
-        actorRole: activeRole,
         body: body.trim(),
         evidenceId: evidenceId || undefined
       };
@@ -186,7 +185,7 @@ export function DisputePanel({
       const response = await fetch(`/api/backend/deals/${dealId}/dispute/proposals/${proposalId}/respond`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actorRole: activeRole, decision })
+        body: JSON.stringify({ decision })
       });
       if (!response.ok) {
         const responseBody = await response.json().catch(() => null);
@@ -209,7 +208,7 @@ export function DisputePanel({
       const response = await fetch(`/api/backend/deals/${dealId}/dispute/assistance/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actorRole: activeRole })
+        body: JSON.stringify({})
       });
       if (!response.ok) {
         const responseBody = await response.json().catch(() => null);

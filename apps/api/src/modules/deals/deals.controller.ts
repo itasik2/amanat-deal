@@ -1,8 +1,10 @@
 import { Body, Controller, ForbiddenException, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { PartyRole } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user';
 import type { PublicUser } from '../auth/auth.service';
 import { PhoneAuthService } from '../auth/phone-auth.service';
 import { SessionAuthGuard } from '../auth/session-auth.guard';
+import { DealAccessService } from './deal-access.service';
 import { CreateDealDto } from './dto/create-deal.dto';
 import { DealsService } from './deals.service';
 import { SecureInvitationsService } from './secure-invitations.service';
@@ -12,7 +14,8 @@ export class DealsController {
   constructor(
     private readonly deals: DealsService,
     private readonly secureInvitations: SecureInvitationsService,
-    private readonly phoneAuth: PhoneAuthService
+    private readonly phoneAuth: PhoneAuthService,
+    private readonly access: DealAccessService
   ) {}
 
   @Post()
@@ -61,13 +64,18 @@ export class DealsController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.deals.get(id);
+  @UseGuards(SessionAuthGuard)
+  async get(@Param('id') id: string, @CurrentUser() user: PublicUser) {
+    const currentUserRole = await this.access.roleForUser(id, user.id);
+    const deal = await this.deals.get(id);
+    return { ...deal, currentUserRole };
   }
 
   @Post(':id/accept')
-  accept(@Param('id') id: string, @Body() body: { actorRole?: string }) {
-    return this.deals.accept(id, body?.actorRole);
+  @UseGuards(SessionAuthGuard)
+  async accept(@Param('id') id: string, @CurrentUser() user: PublicUser) {
+    const role = await this.access.roleForUser(id, user.id);
+    return this.deals.accept(id, role);
   }
 
   @Post(':id/invitations/reissue')
@@ -87,32 +95,52 @@ export class DealsController {
   }
 
   @Post(':id/mock-payment')
-  mockPayment(@Param('id') id: string) {
+  @UseGuards(SessionAuthGuard)
+  async mockPayment(@Param('id') id: string, @CurrentUser() user: PublicUser) {
+    await this.access.requireRole(id, user.id, PartyRole.BUYER);
     return this.deals.mockPayment(id);
   }
 
   @Post(':id/shipment')
-  shipment(@Param('id') id: string, @Body() body: { carrier?: string; trackingNumber?: string }) {
+  @UseGuards(SessionAuthGuard)
+  async shipment(
+    @Param('id') id: string,
+    @Body() body: { carrier?: string; trackingNumber?: string },
+    @CurrentUser() user: PublicUser
+  ) {
+    await this.access.requireRole(id, user.id, PartyRole.SELLER);
     return this.deals.markShipped(id, body);
   }
 
   @Post(':id/mark-delivered')
-  markDelivered(@Param('id') id: string) {
+  @UseGuards(SessionAuthGuard)
+  async markDelivered(@Param('id') id: string, @CurrentUser() user: PublicUser) {
+    await this.access.requireRole(id, user.id, PartyRole.BUYER);
     return this.deals.markDelivered(id);
   }
 
   @Post(':id/confirm-receipt')
-  confirmReceipt(@Param('id') id: string) {
+  @UseGuards(SessionAuthGuard)
+  async confirmReceipt(@Param('id') id: string, @CurrentUser() user: PublicUser) {
+    await this.access.requireRole(id, user.id, PartyRole.BUYER);
     return this.deals.complete(id, 'buyer_confirmed');
   }
 
   @Post(':id/report-problem')
-  reportProblem(@Param('id') id: string, @Body() body: { reason: string }) {
+  @UseGuards(SessionAuthGuard)
+  async reportProblem(
+    @Param('id') id: string,
+    @Body() body: { reason: string },
+    @CurrentUser() user: PublicUser
+  ) {
+    await this.access.roleForUser(id, user.id);
     return this.deals.reportProblem(id, body.reason);
   }
 
   @Get(':id/events')
-  events(@Param('id') id: string) {
+  @UseGuards(SessionAuthGuard)
+  async events(@Param('id') id: string, @CurrentUser() user: PublicUser) {
+    await this.access.roleForUser(id, user.id);
     return this.deals.events(id);
   }
 }

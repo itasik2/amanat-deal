@@ -1,4 +1,8 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user';
+import type { PublicUser } from '../auth/auth.service';
+import { SessionAuthGuard } from '../auth/session-auth.guard';
+import { DealAccessService } from '../deals/deal-access.service';
 import {
   DisputeAssistanceRequestInput,
   DisputeMessageInput,
@@ -8,40 +12,63 @@ import {
 } from './disputes.service';
 
 @Controller('deals')
+@UseGuards(SessionAuthGuard)
 export class DisputesController {
-  constructor(private readonly disputes: DisputesService) {}
+  constructor(
+    private readonly disputes: DisputesService,
+    private readonly access: DealAccessService
+  ) {}
 
   @Get(':id/dispute/messages')
-  list(@Param('id') id: string) {
+  async list(@Param('id') id: string, @CurrentUser() user: PublicUser) {
+    await this.access.roleForUser(id, user.id);
     return this.disputes.list(id);
   }
 
   @Get(':id/dispute/assistance')
-  assistance(@Param('id') id: string) {
+  async assistance(@Param('id') id: string, @CurrentUser() user: PublicUser) {
+    await this.access.roleForUser(id, user.id);
     return this.disputes.assistance(id);
   }
 
   @Post(':id/dispute/assistance/request')
-  requestAssistance(@Param('id') id: string, @Body() body: DisputeAssistanceRequestInput) {
-    return this.disputes.requestAssistance(id, body);
+  async requestAssistance(
+    @Param('id') id: string,
+    @Body() body: DisputeAssistanceRequestInput,
+    @CurrentUser() user: PublicUser
+  ) {
+    const role = await this.access.roleForUser(id, user.id);
+    return this.disputes.requestAssistance(id, { ...body, actorRole: role });
   }
 
   @Post(':id/dispute/messages')
-  message(@Param('id') id: string, @Body() body: DisputeMessageInput) {
-    return this.disputes.message(id, body);
+  async message(
+    @Param('id') id: string,
+    @Body() body: DisputeMessageInput,
+    @CurrentUser() user: PublicUser
+  ) {
+    const role = await this.access.roleForUser(id, user.id);
+    return this.disputes.message(id, { ...body, actorRole: role });
   }
 
   @Post(':id/dispute/proposals')
-  proposal(@Param('id') id: string, @Body() body: DisputeProposalInput) {
-    return this.disputes.proposal(id, body);
+  async proposal(
+    @Param('id') id: string,
+    @Body() body: DisputeProposalInput,
+    @CurrentUser() user: PublicUser
+  ) {
+    const role = await this.access.roleForUser(id, user.id);
+    return this.disputes.proposal(id, { ...body, actorRole: role });
   }
 
   @Post(':id/dispute/proposals/:proposalId/respond')
-  respond(
+  async respond(
     @Param('id') id: string,
     @Param('proposalId') proposalId: string,
-    @Body() body: DisputeResponseInput
+    @Body() body: DisputeResponseInput,
+    @CurrentUser() user: PublicUser
   ) {
-    return this.disputes.respond(id, proposalId, body);
+    const role = await this.access.roleForUser(id, user.id);
+    return this.disputes.respond(id, proposalId, { ...body, actorRole: role });
   }
 }
