@@ -27,6 +27,19 @@ Private deal endpoints require an active `amanat_session` created by phone/OTP a
 - `POST /deals/:id/report-problem` — stops normal flow and moves deal to `PROBLEM_REPORTED`.
 - `GET /deals/:id/events` — immutable event timeline.
 
+### Inspection timeout automation
+
+When delivery starts the inspection window, `inspectionEndsAt` is persisted on the deal.
+
+- Participant reads reconcile an expired `INSPECTION` deal before returning it, so an overdue deal cannot remain interactive merely because the background scheduler is delayed.
+- `GET /internal/automation/inspection-expirations` reconciles overdue inspection deals in batches and requires `Authorization: Bearer <CRON_SECRET>`.
+- The Vercel API project registers a daily production cron as a Hobby-compatible backstop. On a plan that supports minute-level cron frequency, the schedule can be tightened without changing domain logic.
+- Auto-completion is conditional on the deal still being in `INSPECTION`, so a concurrent `PROBLEM_REPORTED` transition prevents release.
+- Auto-completion records `inspection.expired`, marks the deal `COMPLETED`, and changes the mock payment from `FUNDS_SECURED` to `RELEASED`.
+- Manual buyer confirmation now also marks the mock payment `RELEASED`.
+
+For `EXTENDED` protection, missing receipt evidence can block early manual confirmation, but it does not let a silent buyer hold the deal forever after the agreed inspection deadline.
+
 ### Protection plans
 
 Every deal includes terms, event history, dispute channel and evidence collection.
@@ -54,10 +67,10 @@ For `BASIC` deals the same mechanism shows a recommended minimum but does not bl
 Evidence is part of every deal:
 
 - `GET /deals/:id/evidence` — list deal evidence and metadata.
-- `POST /deals/:id/evidence` — multipart upload (`file`, `kind`, `uploaderRole`, optional `note`).
+- `POST /deals/:id/evidence` — multipart upload (`file`, `kind`, optional `note`). The uploader role is derived from the authenticated deal participant on the server.
 - `GET /deals/:id/evidence/:evidenceId/file` — open/download stored evidence.
 
-The API computes SHA-256 on the server. The pilot stores files through `StorageProvider`; the default implementation writes to local `.data/evidence`, while the business layer is prepared for a later S3/R2 provider.
+The API computes SHA-256 on the server. Evidence uses the `StorageProvider` abstraction: Cloudinary is selected when its production credentials are configured, otherwise local storage is used for development. Internal storage keys are not returned in normal evidence JSON responses.
 
 ## Dispute settlement channel
 
