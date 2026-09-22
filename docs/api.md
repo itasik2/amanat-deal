@@ -2,6 +2,18 @@
 
 Base path: `/api/v1`.
 
+## Authorization
+
+Private deal endpoints require an active `amanat_session` created by phone/OTP authentication.
+
+- Deal access is resolved from `sellerId` / `buyerId` on the server.
+- Buyer/seller role is never trusted from the browser for protected actions.
+- Buyer-only actions include mock funding, delivery confirmation and receipt confirmation.
+- Seller-only actions include shipment registration.
+- Evidence and dispute endpoints are available only to authenticated participants of that deal.
+- Evidence uploader role and dispute actor role are overwritten with the authenticated participant role on the server.
+- Public invitation preview remains intentionally limited; full details and claiming require the phone-bound authenticated recipient.
+
 ## Deals
 
 - `POST /deals` — create deal. Optional `protectionPlan`: `BASIC` (default) or `EXTENDED`.
