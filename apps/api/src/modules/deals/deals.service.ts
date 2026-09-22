@@ -53,10 +53,6 @@ export class DealsService {
     const inspectionHours = dto.inspectionHours ?? Number(process.env.DEFAULT_INSPECTION_HOURS ?? 48);
     const status = this.toPrismaStatus(DealStatus.WAITING_COUNTERPARTY);
     const invitedRole = this.oppositeRole(creatorRole);
-    const token = this.createInviteToken();
-    const tokenHash = this.hashToken(token);
-    const shortCode = await this.createUniqueShortCode();
-    const expiresAt = this.invitationExpiry();
     const now = new Date();
 
     const deal = await this.prisma.deal.create({
@@ -72,34 +68,19 @@ export class DealsService {
         creatorRole,
         acceptedBySellerAt: creatorRole === PartyRole.SELLER ? now : undefined,
         acceptedByBuyerAt: creatorRole === PartyRole.BUYER ? now : undefined,
-        invitations: {
-          create: {
-            invitedRole,
-            tokenHash,
-            shortCode,
-            expiresAt
-          }
-        },
         events: {
           create: this.eventData('deal.created', undefined, status, {
             title: dto.title,
             protectionPlan,
             creatorRole,
-            invitedRole,
-            invitationExpiresAt: expiresAt.toISOString()
+            invitedRole
           })
         }
       },
       include: dealInclude
     });
 
-    return {
-      ...deal,
-      invitation: this.publicInvitation(
-        { invitedRole, shortCode, expiresAt },
-        token
-      )
-    };
+    return deal;
   }
 
   async list() {
