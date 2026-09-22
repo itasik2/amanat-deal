@@ -35,6 +35,7 @@ type Deal = {
   platformFeeKzt: number;
   protectionPlan: 'BASIC' | 'EXTENDED';
   creatorRole: PartyRole | null;
+  currentUserRole: PartyRole;
   inspectionHours: number;
   status: string;
   fundsSecuredAt: string | null;
@@ -152,7 +153,9 @@ export default function DealPage() {
       if (!dealResponse.ok) throw new Error(await apiError(dealResponse));
       if (!eventsResponse.ok) throw new Error(await apiError(eventsResponse));
 
-      setDeal((await dealResponse.json()) as Deal);
+      const loadedDeal = (await dealResponse.json()) as Deal;
+      setDeal(loadedDeal);
+      setActiveRole(loadedDeal.currentUserRole);
       setEvents((await eventsResponse.json()) as DealEvent[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить сделку');
@@ -160,13 +163,6 @@ export default function DealPage() {
       setLoading(false);
     }
   }, [id]);
-
-  useEffect(() => {
-    const requestedRole = new URLSearchParams(window.location.search).get('role');
-    if (requestedRole === 'SELLER' || requestedRole === 'BUYER' || requestedRole === 'ADMIN') {
-      setActiveRole(requestedRole);
-    }
-  }, []);
 
   useEffect(() => {
     void load();
@@ -361,17 +357,8 @@ export default function DealPage() {
         </div>
       </section>
 
-      <section className="card role-switch-card spacing-top">
-        <div>
-          <p className="eyebrow">Пилотный стенд ролей</p>
-          <h2>Просмотр сделки</h2>
-          <p className="muted">Сейчас роли можно переключать для тестирования. После авторизации участник будет видеть только свой интерфейс, а админ переедет в отдельный кабинет.</p>
-        </div>
-        <div className="role-tabs" role="tablist" aria-label="Режим просмотра сделки">
-          <button className={`role-tab ${activeRole === 'SELLER' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'SELLER'} onClick={() => setActiveRole('SELLER')}><span>Продавец</span><small>Доказательства · отправка · ожидание выплаты</small></button>
-          <button className={`role-tab ${activeRole === 'BUYER' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'BUYER'} onClick={() => setActiveRole('BUYER')}><span>Покупатель</span><small>Принятие · оплата · получение · проверка</small></button>
-          <button className={`role-tab ${activeRole === 'ADMIN' ? 'active' : ''}`} type="button" role="tab" aria-selected={activeRole === 'ADMIN'} onClick={() => setActiveRole('ADMIN')}><span>Админ</span><small>Контроль · аудит · доказательства · спор</small></button>
-        </div>
+      <section className="card role-context spacing-top">
+        Вы вошли как <strong>{roleLabel(activeRole)}</strong>. Доступные действия определяются вашей ролью в этой сделке на сервере.
       </section>
 
       <div className="two-column spacing-top">
