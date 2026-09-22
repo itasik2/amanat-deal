@@ -236,7 +236,6 @@ export function EvidencePanel({
             fileName: file.name,
             mimeType: file.type || 'application/octet-stream',
             kind,
-            uploaderRole: activeRole,
             note: note.trim() || undefined
           })
         });
@@ -245,7 +244,6 @@ export function EvidencePanel({
         const data = new FormData();
         data.set('file', file);
         data.set('kind', kind);
-        data.set('uploaderRole', activeRole);
         if (note.trim()) data.set('note', note.trim());
 
         const response = await fetch(`/api/backend/deals/${dealId}/evidence`, {
@@ -322,7 +320,7 @@ export function EvidencePanel({
       {!isAdmin ? (
         <form className="form evidence-form spacing-top" onSubmit={submit}>
           <div className="role-context">
-            Вы загружаете материал как <strong>{roleLabel(activeRole)}</strong>. В рабочей версии роль будет определяться аккаунтом автоматически.
+            Вы загружаете материал как <strong>{roleLabel(activeRole)}</strong>. Роль определяется вашим аккаунтом и проверяется сервером.
           </div>
           <div className="form-grid-2">
             <label className="field">
