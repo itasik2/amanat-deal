@@ -72,7 +72,7 @@ Evidence is part of every deal:
 - `POST /deals/:id/evidence` — multipart upload (`file`, `kind`, optional `note`). The uploader role is derived from the authenticated deal participant on the server.
 - `GET /deals/:id/evidence/:evidenceId/file` — open/download stored evidence.
 
-The API computes SHA-256 on the server. Evidence uses the `StorageProvider` abstraction: Cloudinary is selected when its production credentials are configured, otherwise local storage is used for development. Internal storage keys are not returned in normal evidence JSON responses.
+The API computes SHA-256 on the server. Evidence uses the `StorageProvider` abstraction: Cloudinary is selected when its credentials are configured, while local storage is intended only for development or a host with an explicitly persistent volume. On Vercel/serverless, the API refuses local evidence writes when no persistent storage is configured instead of pretending that an ephemeral file is durable. `GET /health` reports the active evidence-storage readiness/mode. Internal storage keys are not returned in normal evidence JSON responses.
 
 ## Dispute settlement channel
 
