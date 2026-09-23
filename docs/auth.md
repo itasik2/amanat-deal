@@ -11,7 +11,7 @@ The primary account identifier is a Kazakhstan phone number. The account itself 
 - Only SHA-256 of the session token is stored in PostgreSQL.
 - Session lifetime defaults to 30 days and can be configured with `AUTH_SESSION_TTL_DAYS`.
 - Logout revokes the server-side session and clears the cookie.
-- Legacy email/password endpoints remain temporarily available for existing pilot test accounts.
+- Legacy email/password endpoints remain temporarily available for existing pilot test accounts only when enabled. They are disabled by default in production unless `LEGACY_EMAIL_AUTH_ENABLED=true` is set explicitly.
 
 ## Phone OTP API
 
@@ -39,7 +39,7 @@ Production must set `OTP_DEBUG_CODE_ENABLED=false` and configure a strong `OTP_H
 - `POST /api/v1/auth/register` `{ email, password, name? }`
 - `POST /api/v1/auth/login` `{ email, password }`
 
-Passwords for legacy accounts are stored only as `scrypt` hashes with a random salt.
+These endpoints are enabled by default only outside production. Production requires the explicit flag `LEGACY_EMAIL_AUTH_ENABLED=true`; otherwise they return 404. Passwords for legacy accounts are stored only as `scrypt` hashes with a random salt.
 
 ## Deal identity and invitations
 
