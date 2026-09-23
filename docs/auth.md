@@ -20,7 +20,19 @@ The primary account identifier is a Kazakhstan phone number. The account itself 
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/logout`
 
-The pilot can expose the generated OTP only when `OTP_DEBUG_CODE_ENABLED=true`. This is for local/test use. Production must set `OTP_DEBUG_CODE_ENABLED=false`, configure `OTP_HASH_SECRET`, and connect a real SMS transport.
+The pilot can expose the generated OTP only when `OTP_DEBUG_CODE_ENABLED=true`. This is strictly for local/test use.
+
+When debug mode is disabled, the API now requires an explicit OTP delivery transport. Configure:
+
+- `OTP_DELIVERY_WEBHOOK_URL` — HTTPS endpoint that receives the SMS delivery request.
+- `OTP_DELIVERY_WEBHOOK_TOKEN` — optional bearer token for that endpoint.
+- `OTP_DELIVERY_TIMEOUT_MS` — delivery timeout, default 8000 ms.
+
+The webhook receives `{ channel: "sms", to, purpose: "login_otp", message, expiresAt }`. This deliberately keeps Amanat Deal independent from a specific SMS vendor and allows the endpoint to be backed by a direct provider adapter or by Notify-KZ.
+
+If debug mode is off and no delivery webhook is configured, the API returns a service-unavailable error instead of falsely reporting that an SMS was sent. A failed webhook delivery also invalidates that OTP challenge immediately so the user can retry instead of waiting for the resend cooldown.
+
+Production must set `OTP_DEBUG_CODE_ENABLED=false` and configure a strong `OTP_HASH_SECRET`.
 
 ## Legacy pilot API
 
