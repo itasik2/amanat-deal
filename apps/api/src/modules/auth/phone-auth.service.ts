@@ -8,10 +8,14 @@ import {
 import { createHash, createHmac, randomBytes, randomInt } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PublicUser } from './auth.service';
+import { OtpDeliveryService } from './otp-delivery.service';
 
 @Injectable()
 export class PhoneAuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly otpDelivery: OtpDeliveryService
+  ) {}
 
   async requestCode(input: { phone?: string }) {
     const phone = this.normalizePhone(input.phone);
@@ -22,19 +26,22 @@ export class PhoneAuthService {
       throw new HttpException('Повторный код можно запросить через минуту', HttpStatus.TOO_MANY_REQUESTS);
     }
 
+    this.otpDelivery.ensureConfigured();
+
     const code = String(randomInt(100000, 1000000));
+    const codeHash = this.hashOtp(phone, code);
     const expiresAt = new Date(now.getTime() + this.otpTtlMinutes() * 60_000);
 
     await this.prisma.phoneOtpChallenge.upsert({
       where: { phone },
       create: {
         phone,
-        codeHash: this.hashOtp(phone, code),
+        codeHash,
         expiresAt,
         sentAt: now
       },
       update: {
-        codeHash: this.hashOtp(phone, code),
+        codeHash,
         expiresAt,
         sentAt: now,
         attempts: 0,
@@ -42,16 +49,27 @@ export class PhoneAuthService {
       }
     });
 
-    // Pilot transport. A real SMS provider can replace this without changing
-    // the OTP/session contract. Raw OTP values are never written to server logs.
-    const debugCodeEnabled = process.env.OTP_DEBUG_CODE_ENABLED === 'true';
+    try {
+      const delivery = await this.otpDelivery.deliver({ phone, code, expiresAt });
 
-    return {
-      ok: true,
-      phone: this.maskPhone(phone),
-      expiresAt,
-      ...(debugCodeEnabled ? { debugCode: code } : {})
-    };
+      return {
+        ok: true,
+        phone: this.maskPhone(phone),
+        expiresAt,
+        ...(delivery.mode === 'debug' ? { debugCode: delivery.debugCode } : {})
+      };
+    } catch (error) {
+      // Do not leave a failed send looking like a valid throttled challenge.
+      // The exact code hash scopes the cleanup to this delivery attempt.
+      await this.prisma.phoneOtpChallenge.updateMany({
+        where: { phone, codeHash, consumedAt: null },
+        data: {
+          expiresAt: now,
+          sentAt: new Date(0)
+        }
+      });
+      throw error;
+    }
   }
 
   async verifyCode(input: { phone?: string; code?: string; name?: string }) {
