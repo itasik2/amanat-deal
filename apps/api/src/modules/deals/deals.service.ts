@@ -42,11 +42,16 @@ const dealInclude = {
 
 const SHORT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
+type ParticipantActor = {
+  userId: string;
+  role: PartyRole;
+};
+
 @Injectable()
 export class DealsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateDealDto) {
+  async create(dto: CreateDealDto, creatorUserId?: string) {
     const protectionPlan = (dto.protectionPlan ?? ProtectionPlan.BASIC) as ProtectionPlan;
     const creatorRole = this.parsePartyRole(dto.creatorRole ?? PartyRole.SELLER);
     const fee = this.calculateFee(dto.amountKzt, protectionPlan);
@@ -69,12 +74,18 @@ export class DealsService {
         acceptedBySellerAt: creatorRole === PartyRole.SELLER ? now : undefined,
         acceptedByBuyerAt: creatorRole === PartyRole.BUYER ? now : undefined,
         events: {
-          create: this.eventData('deal.created', undefined, status, {
-            title: dto.title,
-            protectionPlan,
-            creatorRole,
-            invitedRole
-          })
+          create: this.eventData(
+            'deal.created',
+            undefined,
+            status,
+            {
+              title: dto.title,
+              protectionPlan,
+              creatorRole,
+              invitedRole
+            },
+            creatorUserId ? { userId: creatorUserId, role: creatorRole } : undefined
+          )
         }
       },
       include: dealInclude
@@ -100,28 +111,40 @@ export class DealsService {
     return deal;
   }
 
-  async accept(id: string, actorRole?: string) {
+  async accept(id: string, actor: ParticipantActor) {
     const deal = await this.prisma.deal.findUnique({ where: { id } });
     if (!deal) throw new NotFoundException('Deal not found');
 
     if (deal.creatorRole) {
-      const role = this.parsePartyRole(actorRole ?? '');
+      const role = this.parsePartyRole(actor.role);
       if (deal.status !== this.toPrismaStatus(DealStatus.WAITING_COUNTERPARTY)) {
         throw new BadRequestException('Deal is not waiting for the counterparty');
       }
       if (role === deal.creatorRole) {
         throw new BadRequestException('The creator has already accepted the deal terms');
       }
-      return this.transition(id, DealStatus.WAITING_PAYMENT, 'deal.accepted', { actorRole: role }, {
-        acceptedBySellerAt: role === PartyRole.SELLER ? new Date() : undefined,
-        acceptedByBuyerAt: role === PartyRole.BUYER ? new Date() : undefined
-      });
+      return this.transition(
+        id,
+        DealStatus.WAITING_PAYMENT,
+        'deal.accepted',
+        { actorRole: role },
+        {
+          acceptedBySellerAt: role === PartyRole.SELLER ? new Date() : undefined,
+          acceptedByBuyerAt: role === PartyRole.BUYER ? new Date() : undefined
+        },
+        actor
+      );
     }
 
     // Legacy pilot deals created before counterparty invitations.
-    return this.transition(id, DealStatus.WAITING_PAYMENT, 'deal.accepted', undefined, {
-      acceptedByBuyerAt: new Date()
-    });
+    return this.transition(
+      id,
+      DealStatus.WAITING_PAYMENT,
+      'deal.accepted',
+      undefined,
+      { acceptedByBuyerAt: new Date() },
+      actor
+    );
   }
 
   async invitationByToken(token: string) {
@@ -249,7 +272,7 @@ export class DealsService {
     return this.get(id);
   }
 
-  async markShipped(id: string, shipment: { carrier?: string; trackingNumber?: string }) {
+  async markShipped(id: string, shipment: { carrier?: string; trackingNumber?: string }, actor: ParticipantActor) {
     await this.assertProtectionEvidence(id, 'PRE_SHIPMENT');
     const shippedStatus = this.toPrismaStatus(DealStatus.SHIPPED);
 
@@ -270,7 +293,7 @@ export class DealsService {
             }
           },
           events: {
-            create: this.eventData('shipment.added', deal.status, shippedStatus, shipment)
+            create: this.eventData('shipment.added', deal.status, shippedStatus, shipment, actor)
           }
         }
       });
@@ -279,7 +302,7 @@ export class DealsService {
     return this.get(id);
   }
 
-  async markDelivered(id: string) {
+  async markDelivered(id: string, actor: ParticipantActor) {
     const deliveredAt = new Date();
 
     await this.transition(id, DealStatus.DELIVERED, 'delivery.delivered', undefined, {
@@ -293,7 +316,7 @@ export class DealsService {
           }
         }
       }
-    });
+    }, actor);
 
     const delivered = await this.get(id);
     const inspectionEndsAt = new Date(Date.now() + delivered.inspectionHours * 60 * 60 * 1000);
@@ -307,7 +330,7 @@ export class DealsService {
     );
   }
 
-  async complete(id: string, reason: string) {
+  async complete(id: string, reason: string, actor?: ParticipantActor) {
     if (reason === 'buyer_confirmed') {
       await this.assertProtectionEvidence(id, 'RECEIPT');
     }
@@ -319,10 +342,10 @@ export class DealsService {
           data: { status: 'RELEASED' }
         }
       }
-    });
+    }, actor);
   }
 
-  async reportProblem(id: string, reason: string) {
+  async reportProblem(id: string, reason: string, actor: ParticipantActor) {
     const summary = reason?.trim();
     if (!summary || summary.length < 3) {
       throw new BadRequestException('Problem reason is too short');
@@ -339,7 +362,7 @@ export class DealsService {
         data: {
           status: problemStatus,
           events: {
-            create: this.eventData('problem.reported', deal.status, problemStatus, { reason: summary })
+            create: this.eventData('problem.reported', deal.status, problemStatus, { reason: summary }, actor)
           }
         }
       });
@@ -559,7 +582,8 @@ export class DealsService {
     nextStatus: DealStatus,
     eventType: string,
     payload?: unknown,
-    data: Prisma.DealUpdateInput = {}
+    data: Prisma.DealUpdateInput = {},
+    actor?: ParticipantActor
   ) {
     const prismaStatus = this.toPrismaStatus(nextStatus);
 
@@ -573,7 +597,7 @@ export class DealsService {
           ...data,
           status: prismaStatus,
           events: {
-            create: this.eventData(eventType, deal.status, prismaStatus, payload)
+            create: this.eventData(eventType, deal.status, prismaStatus, payload, actor)
           }
         }
       });
@@ -592,10 +616,12 @@ export class DealsService {
     eventType: string,
     fromStatus?: PrismaDealStatus,
     toStatus?: PrismaDealStatus,
-    payload?: unknown
+    payload?: unknown,
+    actor?: ParticipantActor
   ): Prisma.DealEventCreateWithoutDealInput {
     const data: Prisma.DealEventCreateWithoutDealInput = {
-      actorRole: DealRole.SYSTEM,
+      actorId: actor?.userId,
+      actorRole: actor ? this.toDealRole(actor.role) : DealRole.SYSTEM,
       eventType,
       fromStatus,
       toStatus
@@ -606,6 +632,10 @@ export class DealsService {
     }
 
     return data;
+  }
+
+  private toDealRole(role: PartyRole) {
+    return role === PartyRole.SELLER ? DealRole.SELLER : DealRole.BUYER;
   }
 
   private toLocalStatus(status: PrismaDealStatus) {
