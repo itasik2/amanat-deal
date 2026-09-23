@@ -14,6 +14,7 @@ const disputeStatuses: DealStatus[] = [DealStatus.PROBLEM_REPORTED, DealStatus.W
 
 export type DisputeMessageInput = {
   actorRole?: string;
+  actorUserId?: string;
   body?: string;
   evidenceId?: string;
 };
@@ -25,12 +26,14 @@ export type DisputeProposalInput = DisputeMessageInput & {
 
 export type DisputeResponseInput = {
   actorRole?: string;
+  actorUserId?: string;
   decision?: 'ACCEPT' | 'REJECT';
   body?: string;
 };
 
 export type DisputeAssistanceRequestInput = {
   actorRole?: string;
+  actorUserId?: string;
 };
 
 @Injectable()
@@ -80,6 +83,7 @@ export class DisputesService {
       await tx.dealEvent.create({
         data: {
           dealId,
+          actorId: input.actorUserId,
           actorRole,
           eventType: 'dispute.assistance_requested',
           fromStatus: deal.status,
@@ -113,6 +117,7 @@ export class DisputesService {
       await tx.dealEvent.create({
         data: {
           dealId,
+          actorId: input.actorUserId,
           actorRole,
           eventType: 'dispute.message_added',
           fromStatus: deal.status,
@@ -151,6 +156,7 @@ export class DisputesService {
       await tx.dealEvent.create({
         data: {
           dealId,
+          actorId: input.actorUserId,
           actorRole,
           eventType: 'dispute.proposal_created',
           fromStatus: deal.status,
@@ -223,6 +229,7 @@ export class DisputesService {
       await tx.dealEvent.create({
         data: {
           dealId,
+          actorId: input.actorUserId,
           actorRole,
           eventType: accepted ? 'dispute.settlement_agreed' : 'dispute.proposal_rejected',
           fromStatus: deal.status,

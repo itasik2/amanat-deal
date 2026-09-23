@@ -53,7 +53,7 @@ export class EvidenceController {
     @CurrentUser() user: PublicUser
   ) {
     const role = await this.access.roleForUser(id, user.id);
-    return this.evidence.finalizeUpload(id, { ...body, uploaderRole: role });
+    return this.evidence.finalizeUpload(id, { ...body, uploaderRole: role, uploaderUserId: user.id });
   }
 
   @Post(':id/evidence')
@@ -65,7 +65,7 @@ export class EvidenceController {
     @CurrentUser() user: PublicUser
   ) {
     const role = await this.access.roleForUser(id, user.id);
-    return this.evidence.upload(id, file, { ...body, uploaderRole: role });
+    return this.evidence.upload(id, file, { ...body, uploaderRole: role, uploaderUserId: user.id });
   }
 
   @Get(':id/evidence/:evidenceId/file')
