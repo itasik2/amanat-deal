@@ -10,6 +10,7 @@ The API uses a global NestJS `ValidationPipe` with whitelisting and rejection of
 
 - Deal access is resolved from `sellerId` / `buyerId` on the server.
 - Buyer/seller role is never trusted from the browser for protected actions.
+- Participant-triggered deal, evidence and dispute events record the authenticated user ID together with the server-derived role, so the audit trail identifies the account that performed the action.
 - Buyer-only actions include mock funding, delivery confirmation and receipt confirmation.
 - Seller-only actions include shipment registration.
 - Evidence and dispute endpoints are available only to authenticated participants of that deal.
