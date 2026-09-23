@@ -32,7 +32,7 @@ export class DealsController {
       throw new ForbiddenException('Нельзя пригласить собственный номер');
     }
 
-    const created = await this.deals.create(dto);
+    const created = await this.deals.create(dto, user.id);
     const invitation = await this.secureInvitations.bindCreatorAndIssue(
       created.id,
       dto.creatorRole,
@@ -79,7 +79,7 @@ export class DealsController {
   @UseGuards(SessionAuthGuard)
   async accept(@Param('id') id: string, @CurrentUser() user: PublicUser) {
     const role = await this.access.roleForUser(id, user.id);
-    return this.deals.accept(id, role);
+    return this.deals.accept(id, { userId: user.id, role });
   }
 
   @Post(':id/invitations/reissue')
@@ -112,23 +112,23 @@ export class DealsController {
     @Body() body: { carrier?: string; trackingNumber?: string },
     @CurrentUser() user: PublicUser
   ) {
-    await this.access.requireRole(id, user.id, PartyRole.SELLER);
-    return this.deals.markShipped(id, body);
+    const role = await this.access.requireRole(id, user.id, PartyRole.SELLER);
+    return this.deals.markShipped(id, body, { userId: user.id, role });
   }
 
   @Post(':id/mark-delivered')
   @UseGuards(SessionAuthGuard)
   async markDelivered(@Param('id') id: string, @CurrentUser() user: PublicUser) {
-    await this.access.requireRole(id, user.id, PartyRole.BUYER);
-    return this.deals.markDelivered(id);
+    const role = await this.access.requireRole(id, user.id, PartyRole.BUYER);
+    return this.deals.markDelivered(id, { userId: user.id, role });
   }
 
   @Post(':id/confirm-receipt')
   @UseGuards(SessionAuthGuard)
   async confirmReceipt(@Param('id') id: string, @CurrentUser() user: PublicUser) {
-    await this.access.requireRole(id, user.id, PartyRole.BUYER);
+    const role = await this.access.requireRole(id, user.id, PartyRole.BUYER);
     if (await this.inspections.reconcileDeal(id)) return this.deals.get(id);
-    return this.deals.complete(id, 'buyer_confirmed');
+    return this.deals.complete(id, 'buyer_confirmed', { userId: user.id, role });
   }
 
   @Post(':id/report-problem')
@@ -138,11 +138,11 @@ export class DealsController {
     @Body() body: { reason: string },
     @CurrentUser() user: PublicUser
   ) {
-    await this.access.roleForUser(id, user.id);
+    const role = await this.access.roleForUser(id, user.id);
     if (await this.inspections.reconcileDeal(id)) {
       throw new BadRequestException('Срок проверки уже истёк; сделка завершена автоматически');
     }
-    return this.deals.reportProblem(id, body.reason);
+    return this.deals.reportProblem(id, body.reason, { userId: user.id, role });
   }
 
   @Get(':id/events')
