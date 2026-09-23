@@ -23,7 +23,7 @@ The API uses a global NestJS `ValidationPipe` with whitelisting and rejection of
 - `GET /deals` — list deals.
 - `GET /deals/:id` — get deal.
 - `POST /deals/:id/accept` — buyer accepts terms.
-- `POST /deals/:id/mock-payment` — mock escrow funding, moves deal to `WAITING_SHIPMENT`.
+- `POST /deals/:id/mock-payment` — mock escrow funding, moves deal to `WAITING_SHIPMENT`. The endpoint respects `MOCK_ESCROW_ENABLED=false` so pilot funding can be disabled per environment without removing the code path.
 - `POST /deals/:id/shipment` — seller adds shipment data and moves deal to `SHIPPED`.
 - `POST /deals/:id/mark-delivered` — marks delivery, starts inspection.
 - `POST /deals/:id/confirm-receipt` — releases mock funds to seller and completes deal.
