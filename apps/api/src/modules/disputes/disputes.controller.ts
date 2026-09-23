@@ -38,7 +38,7 @@ export class DisputesController {
     @CurrentUser() user: PublicUser
   ) {
     const role = await this.access.roleForUser(id, user.id);
-    return this.disputes.requestAssistance(id, { ...body, actorRole: role });
+    return this.disputes.requestAssistance(id, { ...body, actorRole: role, actorUserId: user.id });
   }
 
   @Post(':id/dispute/messages')
@@ -48,7 +48,7 @@ export class DisputesController {
     @CurrentUser() user: PublicUser
   ) {
     const role = await this.access.roleForUser(id, user.id);
-    return this.disputes.message(id, { ...body, actorRole: role });
+    return this.disputes.message(id, { ...body, actorRole: role, actorUserId: user.id });
   }
 
   @Post(':id/dispute/proposals')
@@ -58,7 +58,7 @@ export class DisputesController {
     @CurrentUser() user: PublicUser
   ) {
     const role = await this.access.roleForUser(id, user.id);
-    return this.disputes.proposal(id, { ...body, actorRole: role });
+    return this.disputes.proposal(id, { ...body, actorRole: role, actorUserId: user.id });
   }
 
   @Post(':id/dispute/proposals/:proposalId/respond')
@@ -69,6 +69,6 @@ export class DisputesController {
     @CurrentUser() user: PublicUser
   ) {
     const role = await this.access.roleForUser(id, user.id);
-    return this.disputes.respond(id, proposalId, { ...body, actorRole: role });
+    return this.disputes.respond(id, proposalId, { ...body, actorRole: role, actorUserId: user.id });
   }
 }
