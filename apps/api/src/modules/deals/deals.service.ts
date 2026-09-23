@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import {
   DealCategory,
@@ -228,6 +228,10 @@ export class DealsService {
   }
 
   async mockPayment(id: string) {
+    if (process.env.MOCK_ESCROW_ENABLED === 'false') {
+      throw new ServiceUnavailableException('Mock escrow отключён в этом окружении');
+    }
+
     await this.prisma.$transaction(async (tx) => {
       const deal = await this.findDealOrThrow(tx, id);
       const fundsSecured = this.toPrismaStatus(DealStatus.FUNDS_SECURED);
