@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService, SESSION_COOKIE_NAME } from './auth.service';
 import { PhoneAuthService } from './phone-auth.service';
@@ -36,6 +36,7 @@ export class AuthController {
     @Body() body: { email?: string; password?: string; name?: string },
     @Res({ passthrough: true }) response: Response
   ) {
+    this.ensureLegacyEmailAuthEnabled();
     const session = await this.auth.register(body);
     response.cookie(
       SESSION_COOKIE_NAME,
@@ -50,6 +51,7 @@ export class AuthController {
     @Body() body: { email?: string; password?: string },
     @Res({ passthrough: true }) response: Response
   ) {
+    this.ensureLegacyEmailAuthEnabled();
     const session = await this.auth.login(body);
     response.cookie(
       SESSION_COOKIE_NAME,
@@ -69,5 +71,15 @@ export class AuthController {
   @Get('me')
   async me(@Req() request: Request) {
     return { user: await this.auth.requireUser(request.headers.cookie) };
+  }
+
+  private ensureLegacyEmailAuthEnabled() {
+    const configured = process.env.LEGACY_EMAIL_AUTH_ENABLED;
+    const enabled = configured === 'true' ||
+      (configured !== 'false' && process.env.NODE_ENV !== 'production');
+
+    if (!enabled) {
+      throw new NotFoundException('Legacy email authentication is disabled');
+    }
   }
 }
