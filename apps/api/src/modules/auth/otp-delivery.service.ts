@@ -73,12 +73,26 @@ export class OtpDeliveryService {
   }
 
   private debugEnabled() {
-    return process.env.OTP_DEBUG_CODE_ENABLED === 'true';
+    return process.env.NODE_ENV !== 'production' &&
+      process.env.OTP_DEBUG_CODE_ENABLED === 'true';
   }
 
   private webhookUrl() {
     const value = process.env.OTP_DELIVERY_WEBHOOK_URL?.trim();
-    return value || undefined;
+    if (!value) return undefined;
+
+    try {
+      const url = new URL(value);
+      if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') {
+        throw new Error('Production OTP webhook must use HTTPS');
+      }
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        throw new Error('OTP webhook must use HTTP or HTTPS');
+      }
+      return url.toString();
+    } catch {
+      throw new ServiceUnavailableException('OTP delivery webhook URL is invalid');
+    }
   }
 
   private timeoutMs() {
