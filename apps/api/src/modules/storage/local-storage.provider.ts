@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
@@ -13,6 +13,7 @@ export class LocalStorageProvider implements StorageProvider {
       : resolve(process.cwd(), '../../.data/evidence');
 
   async save(dealId: string, originalName: string, buffer: Buffer): Promise<StoredObject> {
+    this.assertPersistentStorage();
     const safeName = originalName.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-120) || 'file';
     const key = `${dealId}/${randomUUID()}-${safeName}`;
     const target = resolve(this.root, key);
@@ -28,11 +29,26 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   async read(key: string): Promise<Buffer> {
+    this.assertPersistentStorage();
     const target = resolve(this.root, key);
     const allowedPrefix = this.root.endsWith(sep) ? this.root : `${this.root}${sep}`;
     if (!target.startsWith(allowedPrefix)) {
       throw new BadRequestException('Invalid storage key');
     }
     return readFile(target);
+  }
+
+  private assertPersistentStorage() {
+    const explicitPersistentPath = Boolean(
+      process.env.EVIDENCE_STORAGE_DIR?.trim() ||
+      process.env.RAILWAY_VOLUME_MOUNT_PATH?.trim()
+    );
+    const isVercel = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
+
+    if (isVercel && !explicitPersistentPath) {
+      throw new ServiceUnavailableException(
+        'Хранилище доказательств не настроено: для serverless требуется Cloudinary или постоянный volume'
+      );
+    }
   }
 }
