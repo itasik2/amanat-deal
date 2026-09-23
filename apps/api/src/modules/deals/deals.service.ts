@@ -620,7 +620,7 @@ export class DealsService {
     actor?: ParticipantActor
   ): Prisma.DealEventCreateWithoutDealInput {
     const data: Prisma.DealEventCreateWithoutDealInput = {
-      actorId: actor?.userId,
+      actor: actor ? { connect: { id: actor.userId } } : undefined,
       actorRole: actor ? this.toDealRole(actor.role) : DealRole.SYSTEM,
       eventType,
       fromStatus,
