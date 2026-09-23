@@ -7,6 +7,7 @@ import { buildProtectionChecklist } from './protection-checklist';
 export type EvidenceUploadInput = {
   kind?: string;
   uploaderRole?: string;
+  uploaderUserId?: string;
   note?: string;
 };
 
@@ -105,6 +106,7 @@ export class EvidenceService {
     return this.createEvidenceRecord({
       dealId,
       uploaderRole,
+      uploaderUserId: input.uploaderUserId,
       kind,
       fileName,
       mimeType: input.mimeType?.trim() || 'application/octet-stream',
@@ -126,6 +128,7 @@ export class EvidenceService {
     return this.createEvidenceRecord({
       dealId,
       uploaderRole,
+      uploaderUserId: input.uploaderUserId,
       kind,
       fileName: file.originalname,
       mimeType: file.mimetype || 'application/octet-stream',
@@ -153,6 +156,7 @@ export class EvidenceService {
   private createEvidenceRecord(input: {
     dealId: string;
     uploaderRole: DealRole;
+    uploaderUserId?: string;
     kind: string;
     fileName: string;
     mimeType: string;
@@ -163,6 +167,7 @@ export class EvidenceService {
       const evidence = await tx.evidenceFile.create({
         data: {
           dealId: input.dealId,
+          uploadedBy: input.uploaderUserId,
           uploaderRole: input.uploaderRole,
           kind: input.kind,
           fileName: input.fileName,
@@ -178,6 +183,7 @@ export class EvidenceService {
       await tx.dealEvent.create({
         data: {
           dealId: input.dealId,
+          actorId: input.uploaderUserId,
           actorRole: input.uploaderRole,
           eventType: 'evidence.uploaded',
           payload: {
