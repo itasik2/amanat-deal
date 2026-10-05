@@ -52,8 +52,10 @@ export function AccountActions() {
 
   return (
     <div className="actions">
+      <Link className="text-button" href="/notifications">Уведомления</Link>
       <span className="muted small">{user.name || user.phone || user.email || 'Участник'}</span>
       <button className="text-button" type="button" onClick={() => void logout()}>Выйти</button>
     </div>
   );
 }
+
