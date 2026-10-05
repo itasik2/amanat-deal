@@ -1,3 +1,4 @@
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { Module } from '@nestjs/common';
 import { AuthModule } from './modules/auth/auth.module';
 import { DealsModule } from './modules/deals/deals.module';
@@ -13,9 +14,11 @@ import { StorageModule } from './modules/storage/storage.module';
     StorageModule,
     HealthModule,
     AuthModule,
+    NotificationsModule,
     DealsModule,
     EvidenceModule,
     DisputesModule
   ]
 })
 export class AppModule {}
+
