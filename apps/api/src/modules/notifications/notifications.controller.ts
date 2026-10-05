@@ -13,6 +13,11 @@ export class NotificationsController {
 @Controller('internal/automation')
 export class NotificationAutomationController {
   constructor(private readonly service: NotificationsService) {}
+  @Get('auth-readiness') @Header('Cache-Control', 'no-store') readiness(@Headers('authorization') authorization?: string) {
+    const secret = process.env.NOTIFY_DISPATCH_SECRET?.trim();
+    if (!secret || authorization !== 'Bearer ' + secret) throw new UnauthorizedException();
+    return this.service.authReadiness();
+  }
   @Get('notifications') @Header('Cache-Control', 'no-store') dispatch(@Headers('authorization') authorization?: string) {
     const secret = process.env.NOTIFY_DISPATCH_SECRET?.trim();
     if (!secret || authorization !== 'Bearer ' + secret) throw new UnauthorizedException();

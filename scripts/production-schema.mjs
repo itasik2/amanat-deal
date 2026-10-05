@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 // Preview builds must never run migrations against shared production credentials.
-if (process.env.VERCEL_ENV !== 'production') process.exit(0);
+if (process.env.VERCEL_ENV !== 'production' || process.env.AMANAT_MIGRATE_ON_BUILD !== 'true') process.exit(0);
 const prisma = new PrismaClient();
 try {
   const tables = await prisma.$queryRaw`SELECT tablename FROM pg_tables WHERE schemaname = current_schema()`;
