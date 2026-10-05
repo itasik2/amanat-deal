@@ -2,12 +2,13 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 
 export type OtpDeliveryResult =
   | { mode: 'debug'; debugCode: string }
-  | { mode: 'webhook' };
+  | { mode: 'webhook' }
+  | { mode: 'notify' };
 
 @Injectable()
 export class OtpDeliveryService {
   ensureConfigured() {
-    if (this.debugEnabled()) return;
+    if (this.debugEnabled() || this.notifyConfigured()) return;
 
     if (!this.webhookUrl()) {
       throw new ServiceUnavailableException(
@@ -20,6 +21,8 @@ export class OtpDeliveryService {
     if (this.debugEnabled()) {
       return { mode: 'debug', debugCode: input.code };
     }
+
+    if (this.notifyConfigured()) return this.deliverNotify(input);
 
     const url = this.webhookUrl();
     if (!url) {
@@ -72,6 +75,26 @@ export class OtpDeliveryService {
     }
   }
 
+  private notifyConfigured() { return Boolean(process.env.NOTIFY_KZ_INTEGRATION_KEY?.trim()); }
+
+  private async deliverNotify(input: { phone: string; code: string; expiresAt: Date }): Promise<OtpDeliveryResult> {
+    try {
+      const base = new URL(process.env.NOTIFY_KZ_API_URL || 'https://notify-kz-api.vercel.app');
+      if (base.protocol !== 'https:') throw new Error('HTTPS required');
+      const response = await fetch(base.origin + '/v1/integration-api/login-otp', {
+        method: 'POST', redirect: 'error',
+        headers: { authorization: 'Bearer ' + process.env.NOTIFY_KZ_INTEGRATION_KEY!.trim(), 'content-type': 'application/json' },
+        body: JSON.stringify({ phone: input.phone, code: input.code, expiresAt: input.expiresAt.toISOString() }),
+        signal: AbortSignal.timeout(this.timeoutMs()),
+      });
+      if (!response.ok) throw new Error('Notify rejected OTP');
+      return { mode: 'notify' };
+    } catch {
+      // Never echo provider data or the OTP in public errors.
+      throw new ServiceUnavailableException('Не удалось поставить SMS-код в очередь. Попробуйте позже.');
+    }
+  }
+
   private debugEnabled() {
     return process.env.NODE_ENV !== 'production' &&
       process.env.OTP_DEBUG_CODE_ENABLED === 'true';
@@ -100,3 +123,4 @@ export class OtpDeliveryService {
     return Number.isFinite(configured) && configured >= 1000 ? configured : 8000;
   }
 }
+
