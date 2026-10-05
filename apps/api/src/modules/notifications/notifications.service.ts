@@ -20,6 +20,21 @@ export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private running?: Promise<{ processed: number }>;
   constructor(private readonly db: PrismaService) {}
+  async authReadiness() {
+    const tables = await this.db.$queryRaw<Array<{ tablename: string }>>`SELECT tablename FROM pg_tables WHERE schemaname = current_schema()`;
+    const names = new Set(tables.map(row => row.tablename));
+    const required = ['User', 'UserSession', 'DealInvitation', 'PhoneOtpChallenge'];
+    const columns = await this.db.$queryRaw<Array<{ table_name: string; column_name: string }>>`SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name IN ('User','UserSession','DealInvitation','PhoneOtpChallenge')`;
+    const migrations = names.has('_prisma_migrations')
+      ? await this.db.$queryRaw`SELECT migration_name, finished_at, rolled_back_at FROM "_prisma_migrations" ORDER BY started_at`
+      : [];
+    let otpQuery = 'ready';
+    try { await this.db.phoneOtpChallenge.findFirst({ select: { id: true } }); }
+    catch (error) { otpQuery = typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : 'failed'; }
+    return { missingTables: required.filter(name => !names.has(name)), columns, migrations, otpQuery,
+      migrationHistory: names.has('_prisma_migrations'), production: process.env.NODE_ENV === 'production',
+      otpSecretConfigured: Boolean(process.env.OTP_HASH_SECRET?.trim()), notifyConfigured: this.configured() };
+  }
   configured() { return Boolean(process.env.NOTIFY_KZ_INTEGRATION_KEY); }
   private async request<T>(path: string, body?: unknown): Promise<T> {
     if (!this.configured()) throw new ServiceUnavailableException('Уведомления ещё не подключены администратором');
