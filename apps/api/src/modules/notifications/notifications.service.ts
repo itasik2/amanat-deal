@@ -33,7 +33,7 @@ export class NotificationsService {
     catch (error) { otpQuery = typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : 'failed'; }
     return { missingTables: required.filter(name => !names.has(name)), columns, migrations, otpQuery,
       migrationHistory: names.has('_prisma_migrations'), production: process.env.NODE_ENV === 'production',
-      otpSecretConfigured: Boolean(process.env.OTP_HASH_SECRET?.trim()), notifyConfigured: this.configured() };
+      schemaGateEnabled: process.env.AMANAT_MIGRATE_ON_BUILD === 'true', otpSecretConfigured: Boolean(process.env.OTP_HASH_SECRET?.trim()), notifyConfigured: this.configured() };
   }
   configured() { return Boolean(process.env.NOTIFY_KZ_INTEGRATION_KEY); }
   private async request<T>(path: string, body?: unknown): Promise<T> {
